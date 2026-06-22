@@ -2,7 +2,7 @@ package repository
 
 type HealthRepository struct{}
 
-func NewHealthRepository() *HealthRepository {
+func ImplHealthRepository() *HealthRepository {
 	return &HealthRepository{}
 }
 

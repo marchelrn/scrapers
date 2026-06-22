@@ -1,15 +1,25 @@
 package service
 
-import "github.com/marchelrn/scrapers/contract"
+import (
+	"net/http"
+
+	"github.com/marchelrn/scrapers/contract"
+	"github.com/marchelrn/scrapers/dto"
+)
 
 type HealthService struct {
 	repo contract.HealthRepository
 }
 
-func NewHealthService(repo contract.HealthRepository) *HealthService {
+func ImplHealthService(repo contract.HealthRepository) *HealthService {
 	return &HealthService{repo: repo}
 }
 
-func (s *HealthService) GetStatus() string {
-	return s.repo.GetStatus()
+func (s *HealthService) GetStatus() *dto.Response {
+	response := s.repo.GetStatus()
+
+	return &dto.Response{
+		Status:  http.StatusOK,
+		Message: response,
+	}
 }

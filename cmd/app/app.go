@@ -10,8 +10,5 @@ import (
 func Run() {
 	cfg := config.Load()
 	log.Println("Server started successfully on port ", "http://localhost:"+cfg.Port)
-	if err := server.Run(cfg); err != nil {
-		log.Fatal(err)
-	}
-
+	server.Run()
 }

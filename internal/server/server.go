@@ -2,22 +2,34 @@ package server
 
 import (
 	"fmt"
+	"log"
 	"net/http"
+	"os"
 
 	"github.com/marchelrn/scrapers/config"
-	"github.com/marchelrn/scrapers/handler"
 	"github.com/marchelrn/scrapers/repository"
 	"github.com/marchelrn/scrapers/routes"
 	"github.com/marchelrn/scrapers/service"
 )
 
-func Run(cfg config.Config) error {
-	repo := repository.NewHealthRepository()
-	svc := service.NewHealthService(repo)
-	h := handler.NewHealthHandler(svc)
+func Run() {
+	log.SetFlags(log.Ldate | log.Ltime)
+	log.SetOutput(os.Stdout)
 
-	r := routes.NewRouter(h)
-	addr := fmt.Sprintf(":%s", cfg.Port)
+	cfg := config.Load()
 
-	return http.ListenAndServe(addr, r)
+	repo := repository.New()
+	svc, err := service.New(repo)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	r := routes.NewRouter(svc)
+
+	serv := &http.Server{
+		Addr:    fmt.Sprintf(":%s", cfg.Port),
+		Handler: r,
+	}
+
+	log.Fatal(serv.ListenAndServe())
 }

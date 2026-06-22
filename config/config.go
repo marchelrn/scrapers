@@ -3,7 +3,8 @@ package config
 import "os"
 
 type Config struct {
-	Port string
+	Port   string
+	IsProd bool
 }
 
 func Load() Config {
@@ -12,5 +13,10 @@ func Load() Config {
 		port = "8080"
 	}
 
-	return Config{Port: port}
+	isProd := false
+	if os.Getenv("IS_PROD") == "true" {
+		isProd = true
+	}
+
+	return Config{Port: port, IsProd: isProd}
 }

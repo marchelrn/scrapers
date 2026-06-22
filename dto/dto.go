@@ -1,7 +1,6 @@
 package dto
 
-type User struct {
-	ID       int    `json:"id"`
-	Username string `json:"username"`
-	Password string `json:"password"`
+type Response struct {
+	Status  int    `json:"status"`
+	Message string `json:"message"`
 }
