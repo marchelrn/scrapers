@@ -1,3 +1,3 @@
-module github.com/your-org/your-app
+module github.com/marchelrn/scrapers
 
 go 1.22.0

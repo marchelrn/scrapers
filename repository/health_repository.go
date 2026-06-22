@@ -7,5 +7,5 @@ func NewHealthRepository() *HealthRepository {
 }
 
 func (r *HealthRepository) GetStatus() string {
-	return "ok"
+	return "I am healthy"
 }

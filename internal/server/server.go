@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/your-org/your-app/config"
-	"github.com/your-org/your-app/handler"
-	"github.com/your-org/your-app/repository"
-	"github.com/your-org/your-app/routes"
-	"github.com/your-org/your-app/service"
+	"github.com/marchelrn/scrapers/config"
+	"github.com/marchelrn/scrapers/handler"
+	"github.com/marchelrn/scrapers/repository"
+	"github.com/marchelrn/scrapers/routes"
+	"github.com/marchelrn/scrapers/service"
 )
 
 func Run(cfg config.Config) error {

@@ -1,6 +1,6 @@
 package main
 
-import "github.com/your-org/your-app/cmd/app"
+import "github.com/marchelrn/scrapers/cmd/app"
 
 func main() {
 	app.Run()

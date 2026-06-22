@@ -3,7 +3,7 @@ package routes
 import (
 	"net/http"
 
-	"github.com/your-org/your-app/handler"
+	"github.com/marchelrn/scrapers/handler"
 )
 
 func NewRouter(healthHandler *handler.HealthHandler) http.Handler {

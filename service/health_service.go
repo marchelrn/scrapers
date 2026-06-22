@@ -1,6 +1,6 @@
 package service
 
-import "github.com/your-org/your-app/contract"
+import "github.com/marchelrn/scrapers/contract"
 
 type HealthService struct {
 	repo contract.HealthRepository

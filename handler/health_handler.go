@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/your-org/your-app/contract"
+	"github.com/marchelrn/scrapers/contract"
 )
 
 type HealthHandler struct {
