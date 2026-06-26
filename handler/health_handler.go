@@ -15,6 +15,12 @@ func (c *HealthHandler) InitService(svc contract.HealthService) {
 	c.service = svc
 }
 
+// @Schemes http
+// @Description Get health status of the server
+// @Tags health
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Router /health [get]
 func (h *HealthHandler) GetHealth(ctx *gin.Context) {
 	response := h.service.GetStatus()
 

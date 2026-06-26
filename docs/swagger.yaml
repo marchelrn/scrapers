@@ -1,0 +1,108 @@
+basePath: /
+definitions:
+  dto.AccountResponse:
+    properties:
+      token:
+        type: string
+    type: object
+  dto.ErrorResponse:
+    properties:
+      error:
+        type: string
+    type: object
+  dto.Response:
+    properties:
+      message:
+        type: string
+      status:
+        type: integer
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: This is a sample server for Scrapers.
+  title: Scrapers API
+  version: "1.0"
+paths:
+  /health:
+    get:
+      description: Get health status of the server
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      tags:
+      - health
+  /v1/login:
+    post:
+      consumes:
+      - application/json
+      description: Login with email and password
+      parameters:
+      - description: Email
+        in: body
+        name: email
+        required: true
+        schema:
+          type: string
+      - description: Password
+        in: body
+        name: password
+        required: true
+        schema:
+          type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.AccountResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      tags:
+      - account
+  /v1/register:
+    post:
+      consumes:
+      - application/json
+      description: Register with name, email and password
+      parameters:
+      - description: Name
+        in: body
+        name: name
+        required: true
+        schema:
+          type: string
+      - description: Email
+        in: body
+        name: email
+        required: true
+        schema:
+          type: string
+      - description: Password
+        in: body
+        name: password
+        required: true
+        schema:
+          type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      tags:
+      - account
+swagger: "2.0"

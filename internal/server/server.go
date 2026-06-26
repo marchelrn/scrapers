@@ -12,7 +12,7 @@ import (
 	"github.com/marchelrn/scrapers/service"
 )
 
-func Run() {
+func Run() error {
 	log.SetFlags(log.Ldate | log.Ltime)
 	log.SetOutput(os.Stdout)
 
@@ -31,5 +31,9 @@ func Run() {
 		Handler: r,
 	}
 
-	log.Fatal(serv.ListenAndServe())
+	if err := serv.ListenAndServe(); err != nil {
+		return err
+	}
+
+	return nil
 }

@@ -7,7 +7,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/marchelrn/scrapers/config"
 	"github.com/marchelrn/scrapers/contract"
+	_ "github.com/marchelrn/scrapers/docs"
 	"github.com/marchelrn/scrapers/handler"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 	"github.com/ulule/limiter/v3"
 	mgin "github.com/ulule/limiter/v3/drivers/middleware/gin"
 	"github.com/ulule/limiter/v3/drivers/store/memory"
@@ -48,5 +51,7 @@ func NewRouter(s *contract.Service) *gin.Engine {
 		api.GET("/health", healthController.GetHealth)
 	}
 
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	r.Run(":8080")
 	return r
 }
