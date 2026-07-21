@@ -15,7 +15,6 @@ func (c *AccountHandler) InitService(svc contract.AccountService) {
 
 // @Schemes http
 // @Description Login with email and password
-// @Tags account
 // @Accept json
 // @Produce json
 // @Param email body string true "Email"
@@ -39,5 +38,8 @@ func (h *AccountHandler) PostLogin(ctx *gin.Context) {
 // @Failure 400 {object} dto.ErrorResponse
 // @Router /v1/register [post]
 func (h *AccountHandler) PostRegister(ctx *gin.Context) {
-
+	ctx.JSON(200, gin.H{
+		"code": 200,
+		"msg":  "success",
+	})
 }

@@ -3,7 +3,8 @@ package contract
 import "github.com/marchelrn/scrapers/dto"
 
 type Service struct {
-	HealthService HealthService
+	HealthService  HealthService
+	AccountService AccountService
 }
 
 type HealthService interface {

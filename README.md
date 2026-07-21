@@ -10,7 +10,7 @@ Template MVC dasar untuk Go, tanpa isi project lama.
 - `routes/` route registration
 - `config/` app config
 - `internal/` bootstrap server/database
-- `contract/` interface antar layer
+- `contract/` interface between layer
 
 ## Quick Start
 
@@ -23,7 +23,7 @@ Template MVC dasar untuk Go, tanpa isi project lama.
 2. Siapkan environment:
 
 ```bash
-cp .env.example .env
+cp .env.example .env  
 ```
 
 3. Jalankan aplikasi:

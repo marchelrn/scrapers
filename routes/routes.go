@@ -23,7 +23,7 @@ func NewRouter(s *contract.Service) *gin.Engine {
 	cfg := config.Load()
 
 	var limitter int64
-	if cfg.IsProd == false {
+	if !cfg.IsProd {
 		limitter = 1000
 	} else {
 		limitter = 100
@@ -46,12 +46,20 @@ func NewRouter(s *contract.Service) *gin.Engine {
 	healthController := &handler.HealthHandler{}
 	healthController.InitService(s.HealthService)
 
+	accountController := &handler.AccountHandler{}
+	accountController.InitService(s.AccountService)
+
 	api := r.Group("/")
 	{
 		api.GET("/health", healthController.GetHealth)
+		api.POST("/v1/login", accountController.PostLogin)
+		api.POST("v1/register", accountController.PostRegister)
 	}
 
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
-	r.Run(":8080")
+	err := r.Run(":8080")
+	if err != nil {
+		return nil
+	}
 	return r
 }
