@@ -3,63 +3,102 @@ package routes
 import (
 	"time"
 
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/marchelrn/scrapers/config"
 	"github.com/marchelrn/scrapers/contract"
-	_ "github.com/marchelrn/scrapers/docs"
 	"github.com/marchelrn/scrapers/handler"
-	swaggerFiles "github.com/swaggo/files"
-	ginSwagger "github.com/swaggo/gin-swagger"
+	"github.com/marchelrn/scrapers/middleware"
 	"github.com/ulule/limiter/v3"
 	mgin "github.com/ulule/limiter/v3/drivers/middleware/gin"
 	"github.com/ulule/limiter/v3/drivers/store/memory"
 )
 
-func NewRouter(s *contract.Service) *gin.Engine {
+// SetupRoutes registers all API routes
+func SetupRoutes(s *contract.Service) *gin.Engine {
 	r := gin.Default()
-	r.RedirectTrailingSlash = false
-
 	cfg := config.Load()
 
-	var limitter int64
-	if !cfg.IsProd {
-		limitter = 1000
-	} else {
-		limitter = 100
-	}
+	r.RedirectTrailingSlash = true
+	r.SetTrustedProxies(nil)
 
 	rate := limiter.Rate{
-		Period: 1 * time.Minute,
-		Limit:  limitter,
+		Period: 1 * time.Second,
+		Limit:  100,
 	}
 
 	store := memory.NewStore()
 	instance := limiter.New(store, rate)
-	rateLimitter := mgin.NewMiddleware(instance)
-	r.Use(rateLimitter)
+	rateLimiter := mgin.NewMiddleware(instance)
+	r.Use(rateLimiter)
 
-	defaultConfig := cors.DefaultConfig()
-	defaultConfig.AllowAllOrigins = true
-	r.Use(cors.New(defaultConfig))
+	r.Use(middleware.CORSMiddleware(cfg))
 
-	healthController := &handler.HealthHandler{}
-	healthController.InitService(s.HealthService)
+	controllers := handler.New(s)
 
-	accountController := &handler.AccountHandler{}
-	accountController.InitService(s.AccountService)
-
-	api := r.Group("/")
+	auth := r.Group("/auth")
 	{
-		api.GET("/health", healthController.GetHealth)
-		api.POST("/v1/login", accountController.PostLogin)
-		api.POST("v1/register", accountController.PostRegister)
+		auth.POST("/register", controllers.Auth.Register)
+		auth.POST("/login", controllers.Auth.Login)
+		auth.GET("/me", middleware.AuthMiddleware(s.Auth), controllers.Auth.Me)
 	}
 
-	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
-	err := r.Run(":8080")
-	if err != nil {
-		return nil
+	protected := r.Group("")
+	protected.Use(middleware.AuthMiddleware(s.Auth))
+	{
+		// Projects
+		projects := protected.Group("/projects")
+		{
+			projects.GET("", controllers.Project.GetAll)
+			projects.POST("", controllers.Project.Create)
+			projects.GET("/:id", controllers.Project.GetByID)
+			projects.PUT("/:id", controllers.Project.Update)
+			projects.DELETE("/:id", controllers.Project.Delete)
+		}
+
+		// Websites
+		websites := protected.Group("/websites")
+		{
+			websites.GET("", controllers.Website.GetAll)
+			websites.POST("", controllers.Website.Create)
+			websites.GET("/:id", controllers.Website.GetByID)
+			websites.PUT("/:id", controllers.Website.Update)
+			websites.DELETE("/:id", controllers.Website.Delete)
+		}
+
+		// Scraping Configs
+		configs := protected.Group("/configs")
+		{
+			configs.GET("", controllers.Config.GetAll)
+			configs.POST("", controllers.Config.Create)
+			configs.GET("/:id", controllers.Config.GetByID)
+			configs.PUT("/:id", controllers.Config.Update)
+			configs.DELETE("/:id", controllers.Config.Delete)
+		}
+
+		// Schedulers
+		schedulers := protected.Group("/schedulers")
+		{
+			schedulers.GET("", controllers.Scheduler.GetAll)
+			schedulers.POST("", controllers.Scheduler.Create)
+			schedulers.GET("/:id", controllers.Scheduler.GetByID)
+			schedulers.PUT("/:id", controllers.Scheduler.Update)
+			schedulers.DELETE("/:id", controllers.Scheduler.Delete)
+		}
 	}
+
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"status":  "ok",
+			"service": "scraping-platform",
+		})
+	})
+
+	r.GET("/", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"status":  "Server is On!",
+			"message": "Welcome to Scrapers",
+		})
+	})
+
 	return r
 }
