@@ -1,31 +1,28 @@
 package dto
 
-// CreateSchedulerRequest is the payload for creating a new scheduler
-type CreateSchedulerRequest struct {
-	ConfigID       int    `json:"config_id" binding:"required"`
-	CronExpression string `json:"cron_expression" binding:"required"`
-	Timezone       string `json:"timezone"`
+import "time"
+
+// CreateScheduleRequest creates a cron schedule for a scraping configuration.
+type CreateScheduleRequest struct {
+	ConfigID       string `json:"config_id" binding:"required,uuid4"`
+	CronExpression string `json:"cron_expression" binding:"required,max=100"`
+	Timezone       string `json:"timezone" binding:"omitempty,max=100"`
 	Enabled        *bool  `json:"enabled"`
 }
 
-// UpdateSchedulerRequest is the payload for updating a scheduler
-type UpdateSchedulerRequest struct {
-	ConfigID       int    `json:"config_id" binding:"required"`
-	CronExpression string `json:"cron_expression" binding:"required"`
-	Timezone       string `json:"timezone"`
-	Enabled        *bool  `json:"enabled"`
+// UpdateScheduleRequest updates mutable schedule fields. Nil values are not changed.
+type UpdateScheduleRequest struct {
+	CronExpression *string `json:"cron_expression" binding:"omitempty,max=100"`
+	Timezone       *string `json:"timezone" binding:"omitempty,max=100"`
+	Enabled        *bool   `json:"enabled"`
 }
 
-// ResponseCreateSchedulerRequest is the response when user successfully create a Scheduler
-type ResponseCreateSchedulerRequest struct {
-	Code    int                    `json:"code"`
-	Message string                 `json:"message"`
-	Data    CreateSchedulerRequest `json:"create_data"`
-}
-
-// ResponseUpdateSchedulerRequest is the response when user Update a Scheduler
-type ResponseUpdateSchedulerRequest struct {
-	Code    int                    `json:"code"`
-	Message string                 `json:"message"`
-	Data    UpdateSchedulerRequest `json:"update_data"`
+// ScheduleResponse is the public representation of a schedule.
+type ScheduleResponse struct {
+	ID             int        `json:"id"`
+	ConfigID       string     `json:"config_id"`
+	CronExpression string     `json:"cron_expression"`
+	Timezone       string     `json:"timezone"`
+	Enabled        bool       `json:"enabled"`
+	NextRun        *time.Time `json:"next_run,omitempty"`
 }

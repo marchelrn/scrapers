@@ -2,63 +2,51 @@ package dto
 
 import (
 	"encoding/json"
+	"time"
 )
 
-// CreateConfigRequest is the payload for creating a new scraping config
-type CreateConfigRequest struct {
-	WebsiteID  int             `json:"website_id" binding:"required"`
-	Name       string          `json:"name" binding:"required"`
-	Method     string          `json:"method" binding:"required,oneof=css xpath regex api browser"`
-	Selector   string          `json:"selector"`
-	Attribute  string          `json:"attribute"`
-	Pagination json.RawMessage `json:"pagination"`
-	Enabled    *bool           `json:"enabled"`
+// CreateScrapingConfigRequest creates a configuration for a registered scraper type.
+type CreateScrapingConfigRequest struct {
+	Name            string                   `json:"name" binding:"required,max=255"`
+	Description     *string                  `json:"description"`
+	ScraperTypeID   int                      `json:"scraper_type_id" binding:"required,gt=0"`
+	Status          string                   `json:"status" binding:"omitempty,oneof=active inactive"`
+	ScheduleEnabled *bool                    `json:"schedule_enabled"`
+	Parameters      []ConfigParameterRequest `json:"parameters"`
 }
 
-// UpdateConfigRequest is the payload for updating a scraping config
-type UpdateConfigRequest struct {
-	WebsiteID  int             `json:"website_id" binding:"required"`
-	Name       string          `json:"name" binding:"required"`
-	Method     string          `json:"method" binding:"required,oneof=css xpath regex api browser"`
-	Selector   string          `json:"selector"`
-	Attribute  string          `json:"attribute"`
-	Pagination json.RawMessage `json:"pagination"`
-	Enabled    *bool           `json:"enabled"`
+// UpdateScrapingConfigRequest updates mutable configuration fields. Nil values are not changed.
+type UpdateScrapingConfigRequest struct {
+	Name            *string                  `json:"name" binding:"omitempty,max=255"`
+	Description     *string                  `json:"description"`
+	ScraperTypeID   *int                     `json:"scraper_type_id" binding:"omitempty,gt=0"`
+	Status          *string                  `json:"status" binding:"omitempty,oneof=active inactive"`
+	ScheduleEnabled *bool                    `json:"schedule_enabled"`
+	Parameters      *[]ConfigParameterRequest `json:"parameters"`
 }
 
-type ConfigData struct {
-	WebsiteID  int             `json:"website_id"`
-	Name       string          `json:"name"`
-	Method     string          `json:"method"`
-	Selector   string          `json:"selector"`
-	Attribute  string          `json:"attribute"`
-	Pagination json.RawMessage `json:"pagination"`
-	Enabled    *bool           `json:"enabled"`
+// ConfigParameterRequest supplies one JSONB parameter value.
+type ConfigParameterRequest struct {
+	ParameterName  string          `json:"parameter_name" binding:"required,max=255"`
+	ParameterValue json.RawMessage `json:"parameter_value" binding:"required"`
 }
 
-// ResponseCreateConfigRequest is the response when user successfully creating a config
-type ResponseCreateConfigRequest struct {
-	Code    int                 `json:"code"`
-	Message string              `json:"message"`
-	Data    CreateConfigRequest `json:"create_data"`
+// ConfigParameterResponse is the public representation of a configuration parameter.
+type ConfigParameterResponse struct {
+	ID             int             `json:"id"`
+	ParameterName  string          `json:"parameter_name"`
+	ParameterValue json.RawMessage `json:"parameter_value"`
 }
 
-// ResponseUpdateConfigRequest is the response when user updating Config
-type ResponseUpdateConfigRequest struct {
-	Code    int                 `json:"code"`
-	Message string              `json:"message"`
-	Data    UpdateConfigRequest `json:"updated_data"`
-}
-
-// ResponseGetAllConfig is the response when user getting configs
-type ResponseGetAllConfig struct {
-	Code    int          `json:"code"`
-	Message string       `json:"message"`
-	Data    []ConfigData `json:"configs"`
-}
-
-type ResponseConfig struct {
-	Code    int        `json:"code"`
-	Message string     `json:"message"`
-	Data    ConfigData `json:"config_data"`
+// ScrapingConfigResponse is returned for create, detail, and list endpoints.
+type ScrapingConfigResponse struct {
+	ID              string                    `json:"id"`
+	Name            string                    `json:"name"`
+	Description     *string                   `json:"description,omitempty"`
+	ScraperTypeID   int                       `json:"scraper_type_id"`
+	CreatedBy       *string                   `json:"created_by,omitempty"`
+	Status          string                    `json:"status"`
+	ScheduleEnabled bool                      `json:"schedule_enabled"`
+	CreatedAt       time.Time                 `json:"created_at"`
+	Parameters      []ConfigParameterResponse `json:"parameters,omitempty"`
 }
