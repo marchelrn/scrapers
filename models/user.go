@@ -2,13 +2,19 @@ package models
 
 import "time"
 
-// User represents a system user (administrator or operator)
+const (
+	UserRoleAdmin    = "admin"
+	UserRoleOperator = "operator"
+)
+
+// User represents the users table.
 type User struct {
-	ID        int       `json:"id" gorm:"primaryKey;autoIncrement"`
-	Name      string    `json:"name" gorm:\"column:name\"`
-	Email     string    `json:"email" gorm:\"column:email\"`
-	Password  string    `json:"-" gorm:\"column:password\"` // Never expose password in JSON
-	Role      string    `json:"role" gorm:\"column:role\"`
-	CreatedAt time.Time `json:"created_at" gorm:\"column:created_at\"`
-	UpdatedAt time.Time `json:"updated_at" gorm:\"column:updated_at\"`
+	ID        string `json:"id" gorm:"column:id;type:uuid;default:gen_random_uuid();primaryKey"`
+	Name      string `json:"name" gorm:"column:name;not null"`
+	Email     string `json:"email" gorm:"column:email;not null;uniqueIndex"`
+	Password  string `json:"-" gorm:"column:password;not null"`
+	Role      string `json:"role" gorm:"column:role;not null;default:operator"`
+	CreatedAt time.Time `json:"created_at" gorm:"column:created_at;autoCreateTime"`
 }
+
+func (User) TableName() string { return "users" }

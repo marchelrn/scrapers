@@ -2,13 +2,16 @@ package models
 
 import "time"
 
-// Scheduler represents a cron-based schedule for a scraping config
-type Scheduler struct {
-	ID             int       `json:"id" gorm:"primaryKey;autoIncrement"`
-	ConfigID       int       `json:"config_id" gorm:\"column:config_id\"`
-	CronExpression string    `json:"cron_expression" gorm:\"column:cron_expression\"`
-	Timezone       string    `json:"timezone" gorm:\"column:timezone\"`
-	Enabled        bool      `json:"enabled" gorm:\"column:enabled\"`
-	CreatedAt      time.Time `json:"created_at" gorm:\"column:created_at\"`
-	UpdatedAt      time.Time `json:"updated_at" gorm:\"column:updated_at\"`
+// Schedule represents the schedules table.
+type Schedule struct {
+	ID             int `json:"id" gorm:"column:id;primaryKey;autoIncrement"`
+	ConfigID       string `json:"config_id" gorm:"column:config_id;type:uuid;not null;index"`
+	CronExpression string `json:"cron_expression" gorm:"column:cron_expression;not null"`
+	Timezone       string `json:"timezone" gorm:"column:timezone;default:Asia/Makassar"`
+	Enabled        bool `json:"enabled" gorm:"column:enabled;default:true"`
+	NextRun        *time.Time `json:"next_run,omitempty" gorm:"column:next_run"`
+
+	Config ScrapingConfig `json:"config,omitempty" gorm:"foreignKey:ConfigID;constraint:OnDelete:CASCADE"`
 }
+
+func (Schedule) TableName() string { return "schedules" }

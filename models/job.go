@@ -2,22 +2,25 @@ package models
 
 import "time"
 
-// Job represents a scraping job execution record
-type Job struct {
-	ID         int        `json:"id" gorm:"primaryKey;autoIncrement"`
-	ConfigID   int        `json:"config_id" gorm:\"column:config_id\"`
-	Status     string     `json:"status" gorm:\"column:status\"`
-	StartedAt  *time.Time `json:"started_at" gorm:\"column:started_at\"`
-	FinishedAt *time.Time `json:"finished_at" gorm:\"column:finished_at\"`
-	Message    *string    `json:"message" gorm:\"column:message\"`
-	CreatedAt  time.Time  `json:"created_at" gorm:\"column:created_at\"`
-}
-
-// Job status constants
 const (
 	JobStatusPending = "pending"
 	JobStatusRunning = "running"
 	JobStatusSuccess = "success"
 	JobStatusFailed  = "failed"
-	JobStatusRetry   = "retry"
 )
+
+// ScrapingJob represents one execution of a scraping configuration.
+type ScrapingJob struct {
+	ID         string `json:"id" gorm:"column:id;type:uuid;default:gen_random_uuid();primaryKey"`
+	ConfigID   string `json:"config_id" gorm:"column:config_id;type:uuid;not null;index"`
+	Status     string `json:"status" gorm:"column:status;not null;default:pending"`
+	StartedAt  *time.Time `json:"started_at,omitempty" gorm:"column:started_at"`
+	FinishedAt *time.Time `json:"finished_at,omitempty" gorm:"column:finished_at"`
+	WorkerName *string `json:"worker_name,omitempty" gorm:"column:worker_name"`
+
+	Config  ScrapingConfig   `json:"config,omitempty" gorm:"foreignKey:ConfigID;constraint:OnDelete:CASCADE"`
+	Logs    []ScrapingLog    `json:"logs,omitempty" gorm:"foreignKey:JobID"`
+	Results []ScrapingResult `json:"results,omitempty" gorm:"foreignKey:JobID"`
+}
+
+func (ScrapingJob) TableName() string { return "scraping_jobs" }
