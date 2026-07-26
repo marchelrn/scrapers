@@ -1,22 +1,21 @@
 -- +goose Up
 SELECT 'up SQL query';
-CREATE TABLE IF NOT EXISTS scrape_configs
+CREATE TABLE IF NOT EXISTS scraping_configs
 (
-    id          SERIAL PRIMARY KEY,
-    website_id  INTEGER NOT NULL REFERENCES websites(id) ON DELETE CASCADE,
-    name        VARCHAR(255) NOT NULL,
-    method      VARCHAR(50) NOT NULL CHECK (method IN ('css', 'xpath', 'regex', 'api', 'browser')),
-    selector    TEXT,
-    attribute   VARCHAR(255),
-    pagination  JSONB,
-    enabled     BOOLEAN DEFAULT TRUE,
-    created_at  TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at  TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name             VARCHAR(255) NOT NULL,
+    description      TEXT,
+    scraper_type_id  INTEGER NOT NULL REFERENCES scraper_types(id) ON DELETE RESTRICT,
+    created_by       UUID REFERENCES users(id) ON DELETE SET NULL,
+    status           VARCHAR(50) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
+    schedule_enabled BOOLEAN DEFAULT FALSE,
+    created_at       TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_scrape_configs_website_id ON scrape_configs(website_id);
-CREATE INDEX idx_scrape_configs_method ON scrape_configs(method);
+CREATE INDEX idx_scraping_configs_scraper_type_id ON scraping_configs(scraper_type_id);
+CREATE INDEX idx_scraping_configs_created_by ON scraping_configs(created_by);
+CREATE INDEX idx_scraping_configs_status ON scraping_configs(status);
 
 -- +goose Down
 SELECT 'down SQL query';
-DROP TABLE scrape_configs;
+DROP TABLE IF EXISTS scraping_configs;

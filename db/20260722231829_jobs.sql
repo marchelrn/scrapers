@@ -1,19 +1,18 @@
 -- +goose Up
 SELECT 'up SQL query';
-CREATE TABLE IF NOT EXISTS jobs
+CREATE TABLE IF NOT EXISTS scraping_jobs
 (
-    id          SERIAL PRIMARY KEY,
-    config_id   INTEGER NOT NULL REFERENCES scrape_configs(id) ON DELETE CASCADE,
-    status      VARCHAR(50) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'running', 'success', 'failed', 'retry')),
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    config_id   UUID NOT NULL REFERENCES scraping_configs(id) ON DELETE CASCADE,
+    status      VARCHAR(50) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'running', 'success', 'failed')),
     started_at  TIMESTAMP WITH TIME ZONE,
     finished_at TIMESTAMP WITH TIME ZONE,
-    message     TEXT,
-    created_at  TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    worker_name VARCHAR(255)
 );
 
-CREATE INDEX idx_jobs_config_id ON jobs(config_id);
-CREATE INDEX idx_jobs_status ON jobs(status);
-CREATE INDEX idx_jobs_created_at ON jobs(created_at DESC);
+CREATE INDEX idx_scraping_jobs_config_id ON scraping_jobs(config_id);
+CREATE INDEX idx_scraping_jobs_status ON scraping_jobs(status);
+
 -- +goose Down
 SELECT 'down SQL query';
-DROP TABLE jobs;
+DROP TABLE IF EXISTS scraping_jobs;
