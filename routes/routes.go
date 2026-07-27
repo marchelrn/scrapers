@@ -45,24 +45,14 @@ func SetupRoutes(s *contract.Service) *gin.Engine {
 	protected := r.Group("")
 	protected.Use(middleware.AuthMiddleware(s.Auth))
 	{
-		// Projects
-		projects := protected.Group("/projects")
+		// Scraper Types
+		scraperTypes := protected.Group("/scraper-types")
 		{
-			projects.GET("", controllers.Project.GetAll)
-			projects.POST("", controllers.Project.Create)
-			projects.GET("/:id", controllers.Project.GetByID)
-			projects.PUT("/:id", controllers.Project.Update)
-			projects.DELETE("/:id", controllers.Project.Delete)
-		}
-
-		// Websites
-		websites := protected.Group("/websites")
-		{
-			websites.GET("", controllers.Website.GetAll)
-			websites.POST("", controllers.Website.Create)
-			websites.GET("/:id", controllers.Website.GetByID)
-			websites.PUT("/:id", controllers.Website.Update)
-			websites.DELETE("/:id", controllers.Website.Delete)
+			scraperTypes.GET("", controllers.ScraperType.GetAll)
+			scraperTypes.POST("", controllers.ScraperType.Create)
+			scraperTypes.GET("/:id", controllers.ScraperType.GetByID)
+			scraperTypes.PUT("/:id", controllers.ScraperType.Update)
+			scraperTypes.DELETE("/:id", controllers.ScraperType.Delete)
 		}
 
 		// Scraping Configs
@@ -75,14 +65,31 @@ func SetupRoutes(s *contract.Service) *gin.Engine {
 			configs.DELETE("/:id", controllers.Config.Delete)
 		}
 
-		// Schedulers
-		schedulers := protected.Group("/schedulers")
+		// Schedules
+		schedules := protected.Group("/schedules")
 		{
-			schedulers.GET("", controllers.Scheduler.GetAll)
-			schedulers.POST("", controllers.Scheduler.Create)
-			schedulers.GET("/:id", controllers.Scheduler.GetByID)
-			schedulers.PUT("/:id", controllers.Scheduler.Update)
-			schedulers.DELETE("/:id", controllers.Scheduler.Delete)
+			schedules.GET("", controllers.Schedule.GetAll)
+			schedules.POST("", controllers.Schedule.Create)
+			schedules.GET("/:id", controllers.Schedule.GetByID)
+			schedules.PUT("/:id", controllers.Schedule.Update)
+			schedules.DELETE("/:id", controllers.Schedule.Delete)
+		}
+
+		// Scraping Jobs
+		jobs := protected.Group("/jobs")
+		{
+			jobs.GET("", controllers.Job.GetAll)
+			jobs.POST("", controllers.Job.Create)
+			jobs.GET("/:id", controllers.Job.GetByID)
+			jobs.PUT("/:id", controllers.Job.UpdateStatus)
+			jobs.POST("/:id/logs", controllers.Job.AddLog)
+			jobs.POST("/:id/results", controllers.Job.AddResult)
+		}
+
+		// Dashboard
+		dashboard := protected.Group("/dashboard")
+		{
+			dashboard.GET("/summary", controllers.Dashboard.GetSummary)
 		}
 	}
 
