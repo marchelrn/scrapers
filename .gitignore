@@ -6,3 +6,5 @@ tmp/
 .idea
 sql/
 goose
+workers/python/__pycache__
+workers/python/venv
