@@ -14,6 +14,7 @@ type Repository struct {
 	ScrapingJob         ScrapingJobRepository
 	ScrapingLog         ScrapingLogRepository
 	ScrapingResult      ScrapingResultRepository
+	Dashboard           DashboardRepository
 }
 
 // ── Users ────────────────────────────────────────────────────────────────────
@@ -94,4 +95,10 @@ type ScrapingLogRepository interface {
 type ScrapingResultRepository interface {
 	Create(result *models.ScrapingResult) error
 	GetByJobID(jobID string) ([]models.ScrapingResult, error)
+}
+
+// ── Dashboard ────────────────────────────────────────────────────────────────
+
+type DashboardRepository interface {
+	GetSummary() (*models.DashboardSummary, error)
 }

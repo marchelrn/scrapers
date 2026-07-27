@@ -10,6 +10,7 @@ type Service struct {
 	ScrapingConfig ScrapingConfigService
 	Schedule       ScheduleService
 	ScrapingJob    ScrapingJobService
+	Dashboard      DashboardService
 }
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
@@ -60,4 +61,10 @@ type ScrapingJobService interface {
 	UpdateStatus(id string, req dto.UpdateScrapingJobRequest) (*dto.ScrapingJobResponse, error)
 	AddLog(jobID string, req dto.CreateScrapingLogRequest) (*dto.ScrapingLogResponse, error)
 	AddResult(jobID string, req dto.CreateScrapingResultRequest) (*dto.ScrapingResultResponse, error)
+}
+
+// ── Dashboard ────────────────────────────────────────────────────────────────
+
+type DashboardService interface {
+	GetSummary() (*dto.DashboardSummaryResponse, error)
 }
