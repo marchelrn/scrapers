@@ -44,7 +44,7 @@ type ScrapingConfigResponse struct {
 	Name            string                    `json:"name"`
 	Description     *string                   `json:"description,omitempty"`
 	ScraperTypeID   int                       `json:"scraper_type_id"`
-	CreatedBy       *string                   `json:"created_by,omitempty"`
+	CreatedBy       *int                      `json:"created_by,omitempty"`
 	Status          string                    `json:"status"`
 	ScheduleEnabled bool                      `json:"schedule_enabled"`
 	CreatedAt       time.Time                 `json:"created_at"`
