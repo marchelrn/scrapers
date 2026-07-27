@@ -2,30 +2,26 @@ package repository
 
 import (
 	"github.com/marchelrn/scrapers/contract"
-
 	"gorm.io/gorm"
 
 	"github.com/marchelrn/scrapers/models"
 )
 
-// SchedulerRepository handles database operations for schedulers
-type SchedulerRepository struct {
+// ScheduleRepository handles database operations for schedules.
+type ScheduleRepository struct {
 	db *gorm.DB
 }
 
-// NewSchedulerRepository creates a new SchedulerRepository
-func ImplSchedulerRepository(db *gorm.DB) contract.SchedulerRepository {
-	return &SchedulerRepository{db: db}
+func ImplScheduleRepository(db *gorm.DB) contract.ScheduleRepository {
+	return &ScheduleRepository{db: db}
 }
 
-// Create inserts a new scheduler into the database
-func (r *SchedulerRepository) Create(m *models.Scheduler) error {
+func (r *ScheduleRepository) Create(m *models.Schedule) error {
 	return r.db.Create(m).Error
 }
 
-// GetAll retrieves all schedulers, optionally filtered by config_id
-func (r *SchedulerRepository) GetAll(configID *int) ([]models.Scheduler, error) {
-	var ms []models.Scheduler
+func (r *ScheduleRepository) GetAll(configID *string) ([]models.Schedule, error) {
+	var ms []models.Schedule
 	query := r.db
 	if configID != nil {
 		query = query.Where("config_id = ?", *configID)
@@ -34,9 +30,8 @@ func (r *SchedulerRepository) GetAll(configID *int) ([]models.Scheduler, error) 
 	return ms, err
 }
 
-// GetByID retrieves a scheduler by ID
-func (r *SchedulerRepository) GetByID(id int) (*models.Scheduler, error) {
-	var m models.Scheduler
+func (r *ScheduleRepository) GetByID(id int) (*models.Schedule, error) {
+	var m models.Schedule
 	err := r.db.First(&m, id).Error
 	if err != nil {
 		return nil, err
@@ -44,12 +39,10 @@ func (r *SchedulerRepository) GetByID(id int) (*models.Scheduler, error) {
 	return &m, nil
 }
 
-// Update modifies an existing scheduler
-func (r *SchedulerRepository) Update(m *models.Scheduler) error {
+func (r *ScheduleRepository) Update(m *models.Schedule) error {
 	return r.db.Save(m).Error
 }
 
-// Delete removes a scheduler by ID
-func (r *SchedulerRepository) Delete(id int) error {
-	return r.db.Delete(&models.Scheduler{}, id).Error
+func (r *ScheduleRepository) Delete(id int) error {
+	return r.db.Delete(&models.Schedule{}, id).Error
 }
