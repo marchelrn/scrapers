@@ -10,145 +10,92 @@ import (
 	"github.com/marchelrn/scrapers/pkg/response"
 )
 
-// SchedulerController handles scheduler HTTP requests
-type SchedulerController struct {
-	service contract.SchedulerService
+// ScheduleController handles schedule HTTP requests.
+type ScheduleController struct {
+	service contract.ScheduleService
 }
 
-// NewSchedulerController creates a new SchedulerController
-func (c *SchedulerController) InitService(s *contract.Service) {
-	c.service = s.Scheduler
+func (ctrl *ScheduleController) InitService(s *contract.Service) {
+	ctrl.service = s.Schedule
 }
 
-// GetAll retrieves all schedulers
-// @Summary List all schedulers
-// @Description Get a list of all schedulers, optionally filtered by config_id
-// @Tags Schedulers
-// @Produce json
-// @Security BearerAuth
-// @Param config_id query int false "Filter by config ID"
-// @Success 200 {object} response.APIResponse{data=[]models.Scheduler}
-// @Router /api/v1/schedulers [get]
-func (h *SchedulerController) GetAll(c *gin.Context) {
-	var configID *int
+// GetAll retrieves all schedules, optionally filtered by config_id.
+func (h *ScheduleController) GetAll(c *gin.Context) {
+	var configID *string
 	if cidStr := c.Query("config_id"); cidStr != "" {
-		cid, err := strconv.Atoi(cidStr)
-		if err != nil {
-			response.BadRequest(c, "Invalid config_id")
-			return
-		}
-		configID = &cid
+		configID = &cidStr
 	}
 
-	schedulers, err := h.service.GetAll(configID)
+	schedules, err := h.service.GetAll(configID)
 	if err != nil {
 		response.InternalServerError(c, err.Error())
 		return
 	}
-	response.OK(c, "Schedulers retrieved successfully", schedulers)
+	response.OK(c, "Schedules retrieved successfully", schedules)
 }
 
-// Create creates a new scheduler
-// @Summary Create a scheduler
-// @Description Create a new cron-based scheduler for a scraping config
-// @Tags Schedulers
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param request body dto.CreateSchedulerRequest true "Scheduler data"
-// @Success 201 {object} response.APIResponse{data=models.Scheduler}
-// @Failure 400 {object} response.APIResponse
-// @Router /api/v1/schedulers [post]
-func (h *SchedulerController) Create(c *gin.Context) {
-	var req dto.CreateSchedulerRequest
+// Create creates a new schedule.
+func (h *ScheduleController) Create(c *gin.Context) {
+	var req dto.CreateScheduleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "Invalid request: "+err.Error())
 		return
 	}
 
-	scheduler, err := h.service.Create(req)
+	schedule, err := h.service.Create(req)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
 	}
 
-	response.Created(c, "Scheduler created successfully", scheduler)
+	response.Created(c, "Schedule created successfully", schedule)
 }
 
-// GetByID retrieves a scheduler by ID
-// @Summary Get scheduler by ID
-// @Description Get detailed information about a specific scheduler
-// @Tags Schedulers
-// @Produce json
-// @Security BearerAuth
-// @Param id path int true "Scheduler ID"
-// @Success 200 {object} response.APIResponse{data=models.Scheduler}
-// @Failure 404 {object} response.APIResponse
-// @Router /api/v1/schedulers/{id} [get]
-func (h *SchedulerController) GetByID(c *gin.Context) {
+// GetByID retrieves a schedule by ID.
+func (h *ScheduleController) GetByID(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		response.BadRequest(c, "Invalid scheduler ID")
+		response.BadRequest(c, "Invalid schedule ID")
 		return
 	}
 
-	scheduler, err := h.service.GetByID(id)
+	schedule, err := h.service.GetByID(id)
 	if err != nil {
 		response.NotFound(c, err.Error())
 		return
 	}
 
-	response.OK(c, "Scheduler retrieved successfully", scheduler)
+	response.OK(c, "Schedule retrieved successfully", schedule)
 }
 
-// Update modifies an existing scheduler
-// @Summary Update a scheduler
-// @Description Update an existing scheduler's cron expression or settings
-// @Tags Schedulers
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path int true "Scheduler ID"
-// @Param request body dto.UpdateSchedulerRequest true "Updated scheduler data"
-// @Success 200 {object} response.APIResponse{data=models.Scheduler}
-// @Failure 400,404 {object} response.APIResponse
-// @Router /api/v1/schedulers/{id} [put]
-func (h *SchedulerController) Update(c *gin.Context) {
+// Update modifies an existing schedule.
+func (h *ScheduleController) Update(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		response.BadRequest(c, "Invalid scheduler ID")
+		response.BadRequest(c, "Invalid schedule ID")
 		return
 	}
 
-	var req dto.UpdateSchedulerRequest
+	var req dto.UpdateScheduleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "Invalid request: "+err.Error())
 		return
 	}
 
-	scheduler, err := h.service.Update(id, req)
+	schedule, err := h.service.Update(id, req)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
 	}
 
-	response.OK(c, "Scheduler updated successfully", scheduler)
+	response.OK(c, "Schedule updated successfully", schedule)
 }
 
-// Delete removes a scheduler
-// @Summary Delete a scheduler
-// @Description Delete a scheduler
-// @Tags Schedulers
-// @Produce json
-// @Security BearerAuth
-// @Param id path int true "Scheduler ID"
-// @Success 200 {object} response.APIResponse
-// @Failure 404 {object} response.APIResponse
-// @Router /api/v1/schedulers/{id} [delete]
-func (h *SchedulerController) Delete(c *gin.Context) {
+// Delete removes a schedule.
+func (h *ScheduleController) Delete(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		response.BadRequest(c, "Invalid scheduler ID")
+		response.BadRequest(c, "Invalid schedule ID")
 		return
 	}
 
@@ -157,5 +104,5 @@ func (h *SchedulerController) Delete(c *gin.Context) {
 		return
 	}
 
-	response.OK(c, "Scheduler deleted successfully", nil)
+	response.OK(c, "Schedule deleted successfully", nil)
 }

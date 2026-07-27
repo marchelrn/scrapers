@@ -3,27 +3,30 @@ package handler
 import "github.com/marchelrn/scrapers/contract"
 
 type Controllers struct {
-	Auth      *AuthController
-	Config    *ConfigController
-	Project   *ProjectController
-	Scheduler *SchedulerController
-	Website   *WebsiteController
+	Auth          *AuthController
+	ScraperType   *ScraperTypeController
+	Config        *ScrapingConfigController
+	Schedule      *ScheduleController
+	Job           *ScrapingJobController
+	Dashboard     *DashboardController
 }
 
-func New(repo *contract.Service) Controllers {
+func New(svc *contract.Service) Controllers {
 	ctrl := Controllers{
-		Auth:      &AuthController{},
-		Config:    &ConfigController{},
-		Project:   &ProjectController{},
-		Scheduler: &SchedulerController{},
-		Website:   &WebsiteController{},
+		Auth:        &AuthController{},
+		ScraperType: &ScraperTypeController{},
+		Config:      &ScrapingConfigController{},
+		Schedule:    &ScheduleController{},
+		Job:         &ScrapingJobController{},
+		Dashboard:   &DashboardController{},
 	}
 
-	ctrl.Auth.InitService(repo)
-	ctrl.Config.InitService(repo)
-	ctrl.Project.InitService(repo)
-	ctrl.Scheduler.InitService(repo)
-	ctrl.Website.InitService(repo)
+	ctrl.Auth.InitService(svc)
+	ctrl.ScraperType.InitService(svc)
+	ctrl.Config.InitService(svc)
+	ctrl.Schedule.InitService(svc)
+	ctrl.Job.InitService(svc)
+	ctrl.Dashboard.InitService(svc)
 
 	return ctrl
 }
