@@ -2,225 +2,176 @@ package service
 
 import (
 	"errors"
-	"net/http"
-
-	"github.com/marchelrn/scrapers/repository"
 
 	"github.com/marchelrn/scrapers/contract"
 	"github.com/marchelrn/scrapers/dto"
 	"github.com/marchelrn/scrapers/models"
 )
 
-// ConfigService handles scraping configuration business logic
-type ConfigService struct {
-	configRepo  contract.ConfigRepository
-	websiteRepo contract.WebsiteRepository
+// ScrapingConfigService handles scraping configuration business logic.
+type ScrapingConfigService struct {
+	configRepo      contract.ScrapingConfigRepository
+	configParamRepo contract.ConfigParameterRepository
+	scraperTypeRepo contract.ScraperTypeRepository
 }
 
-// ImplConfigService NewConfigService creates a new ConfigService
-func ImplConfigService(configRepo contract.ConfigRepository, websiteRepo contract.WebsiteRepository) contract.ConfigService {
-	return &ConfigService{
-		configRepo:  configRepo,
-		websiteRepo: websiteRepo,
+func ImplScrapingConfigService(
+	configRepo contract.ScrapingConfigRepository,
+	configParamRepo contract.ConfigParameterRepository,
+	scraperTypeRepo contract.ScraperTypeRepository,
+) contract.ScrapingConfigService {
+	return &ScrapingConfigService{
+		configRepo:      configRepo,
+		configParamRepo: configParamRepo,
+		scraperTypeRepo: scraperTypeRepo,
 	}
 }
 
-// Create validates and creates a new scraping config
-func (s *ConfigService) Create(req dto.CreateConfigRequest) (*dto.ResponseCreateConfigRequest, error) {
-	// Validate website exists
-	_, err := s.websiteRepo.GetByID(req.WebsiteID)
+// Create validates and creates a new scraping config with its parameters.
+func (s *ScrapingConfigService) Create(req dto.CreateScrapingConfigRequest, userID int) (*dto.ScrapingConfigResponse, error) {
+	// Validate scraper type exists
+	_, err := s.scraperTypeRepo.GetByID(req.ScraperTypeID)
 	if err != nil {
-		return nil, errors.New("website not found")
+		return nil, errors.New("scraper type not found")
 	}
 
-	// Business rule validation: selector required for certain methods
-	if err := s.validateMethodSelector(req.Method, req.Selector); err != nil {
-		return nil, err
+	status := models.ScrapingConfigStatusActive
+	if req.Status != "" {
+		status = req.Status
 	}
 
-	enabled := true
-	if req.Enabled != nil {
-		enabled = *req.Enabled
+	scheduleEnabled := false
+	if req.ScheduleEnabled != nil {
+		scheduleEnabled = *req.ScheduleEnabled
 	}
 
-	config := &models.ScrapeConfig{
-		WebsiteID:  req.WebsiteID,
-		Name:       req.Name,
-		Method:     req.Method,
-		Enabled:    enabled,
-		Pagination: req.Pagination,
-	}
-
-	if req.Selector != "" {
-		config.Selector = &req.Selector
-	}
-	if req.Attribute != "" {
-		config.Attribute = &req.Attribute
+	config := &models.ScrapingConfig{
+		Name:            req.Name,
+		Description:     req.Description,
+		ScraperTypeID:   req.ScraperTypeID,
+		CreatedBy:       &userID,
+		Status:          status,
+		ScheduleEnabled: scheduleEnabled,
 	}
 
 	if err := s.configRepo.Create(config); err != nil {
 		return nil, errors.New("failed to create config")
 	}
 
-	return &dto.ResponseCreateConfigRequest{
-		Code:    201,
-		Message: "Config created successfully",
-		Data: dto.CreateConfigRequest{
-			WebsiteID:  config.WebsiteID,
-			Name:       config.Name,
-			Method:     config.Method,
-			Selector:   *config.Selector,
-			Attribute:  *config.Attribute,
-			Pagination: config.Pagination,
-			Enabled:    &config.Enabled,
-		},
-	}, nil
-}
+	// Save parameters
+	if len(req.Parameters) > 0 {
+		for _, p := range req.Parameters {
+			param := &models.ConfigParameter{
+				ConfigID:       config.ID,
+				ParameterName:  p.ParameterName,
+				ParameterValue: p.ParameterValue,
+			}
+			if err := s.configParamRepo.Create(param); err != nil {
+				return nil, errors.New("failed to create config parameter")
+			}
+		}
+	}
 
-// GetAll retrieves all configs, optionally filtered by website_id
-func (s *ConfigService) GetAll(websiteID *int) (*dto.ResponseGetAllConfig, error) {
-	configs, err := s.configRepo.GetAll(websiteID)
+	// Reload with relations
+	created, err := s.configRepo.GetByID(config.ID)
 	if err != nil {
-		return nil, errors.New("failed to get all configs")
+		return nil, errors.New("failed to reload config")
 	}
 
-	response := &dto.ResponseGetAllConfig{
-		Code:    http.StatusOK,
-		Message: "All configs retrieved successfully",
-		Data:    []dto.ConfigData{},
-	}
-	for _, config := range configs {
-		response.Data = append(response.Data, dto.ConfigData{
-			WebsiteID:  config.WebsiteID,
-			Name:       config.Name,
-			Method:     config.Method,
-			Selector:   *config.Selector,
-			Attribute:  *config.Attribute,
-			Pagination: config.Pagination,
-			Enabled:    &config.Enabled,
-		})
-	}
-	return response, nil
+	resp := dto.ToScrapingConfigResponse(*created)
+	return &resp, nil
 }
 
-// GetByID retrieves a config by ID
-func (s *ConfigService) GetByID(id int) (*dto.ResponseConfig, error) {
+// GetAll retrieves all scraping configs.
+func (s *ScrapingConfigService) GetAll() ([]dto.ScrapingConfigResponse, error) {
+	configs, err := s.configRepo.GetAll()
+	if err != nil {
+		return nil, errors.New("failed to get configs")
+	}
+
+	responses := make([]dto.ScrapingConfigResponse, 0, len(configs))
+	for _, c := range configs {
+		responses = append(responses, dto.ToScrapingConfigResponse(c))
+	}
+	return responses, nil
+}
+
+// GetByID retrieves a config by UUID.
+func (s *ScrapingConfigService) GetByID(id string) (*dto.ScrapingConfigResponse, error) {
 	config, err := s.configRepo.GetByID(id)
 	if err != nil {
 		return nil, errors.New("config not found")
 	}
-	return &dto.ResponseConfig{
-		Code:    http.StatusOK,
-		Message: "Config retrieved successfully",
-		Data: dto.ConfigData{
-			WebsiteID:  config.WebsiteID,
-			Name:       config.Name,
-			Method:     config.Method,
-			Selector:   *config.Selector,
-			Attribute:  *config.Attribute,
-			Pagination: config.Pagination,
-			Enabled:    &config.Enabled,
-		},
-	}, nil
+	resp := dto.ToScrapingConfigResponse(*config)
+	return &resp, nil
 }
 
-// Update validates and updates a scraping config
-func (s *ConfigService) Update(id int, req dto.UpdateConfigRequest) (*dto.ResponseUpdateConfigRequest, error) {
-	// Validate website exists
-	_, err := s.websiteRepo.GetByID(req.WebsiteID)
-	if err != nil {
-		return nil, errors.New("website not found")
-	}
-
-	// Business rule validation
-	if err := s.validateMethodSelector(req.Method, req.Selector); err != nil {
-		return nil, err
-	}
-
+// Update validates and updates a scraping config.
+func (s *ScrapingConfigService) Update(id string, req dto.UpdateScrapingConfigRequest) (*dto.ScrapingConfigResponse, error) {
 	config, err := s.configRepo.GetByID(id)
 	if err != nil {
 		return nil, errors.New("config not found")
 	}
 
-	config.WebsiteID = req.WebsiteID
-	config.Name = req.Name
-	config.Method = req.Method
-	config.Pagination = req.Pagination
-
-	if req.Selector != "" {
-		config.Selector = &req.Selector
-	} else {
-		config.Selector = nil
+	if req.Name != nil {
+		config.Name = *req.Name
 	}
-
-	if req.Attribute != "" {
-		config.Attribute = &req.Attribute
-	} else {
-		config.Attribute = nil
+	if req.Description != nil {
+		config.Description = req.Description
 	}
-
-	if req.Enabled != nil {
-		config.Enabled = *req.Enabled
+	if req.ScraperTypeID != nil {
+		// Validate scraper type exists
+		if _, err := s.scraperTypeRepo.GetByID(*req.ScraperTypeID); err != nil {
+			return nil, errors.New("scraper type not found")
+		}
+		config.ScraperTypeID = *req.ScraperTypeID
+	}
+	if req.Status != nil {
+		config.Status = *req.Status
+	}
+	if req.ScheduleEnabled != nil {
+		config.ScheduleEnabled = *req.ScheduleEnabled
 	}
 
 	if err := s.configRepo.Update(config); err != nil {
 		return nil, errors.New("failed to update config")
 	}
 
-	return &dto.ResponseUpdateConfigRequest{
-		Code:    http.StatusOK,
-		Message: "Config updated successfully",
-		Data: dto.UpdateConfigRequest{
-			WebsiteID:  config.WebsiteID,
-			Name:       config.Name,
-			Method:     config.Method,
-			Selector:   *config.Selector,
-			Attribute:  *config.Attribute,
-			Pagination: config.Pagination,
-			Enabled:    &config.Enabled,
-		},
-	}, nil
-}
-
-// Delete removes a config by ID
-func (s *ConfigService) Delete(id int) error {
-	if err := s.configRepo.Delete(id); err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
-			return errors.New("config not found")
+	// Replace parameters if provided
+	if req.Parameters != nil {
+		if err := s.configParamRepo.DeleteByConfigID(id); err != nil {
+			return nil, errors.New("failed to clear old parameters")
 		}
-		return errors.New("failed to delete config")
+		for _, p := range *req.Parameters {
+			param := &models.ConfigParameter{
+				ConfigID:       id,
+				ParameterName:  p.ParameterName,
+				ParameterValue: p.ParameterValue,
+			}
+			if err := s.configParamRepo.Create(param); err != nil {
+				return nil, errors.New("failed to create config parameter")
+			}
+		}
 	}
-	return nil
+
+	// Reload
+	updated, err := s.configRepo.GetByID(id)
+	if err != nil {
+		return nil, errors.New("failed to reload config")
+	}
+
+	resp := dto.ToScrapingConfigResponse(*updated)
+	return &resp, nil
 }
 
-// validateMethodSelector enforces business rules:
-// - method=CSS     → selector is required (CSS selector)
-// - method=xpath   → selector is required (XPath expression)
-// - method=regex   → selector is required (regex pattern)
-// - method=api     → selector is required (API endpoint)
-// - method=browser → selector is optional
-func (s *ConfigService) validateMethodSelector(method, selector string) error {
-	switch method {
-	case "css":
-		if selector == "" {
-			return errors.New("selector is required for CSS method")
-		}
-	case "xpath":
-		if selector == "" {
-			return errors.New("selector (XPath expression) is required for XPath method")
-		}
-	case "regex":
-		if selector == "" {
-			return errors.New("selector (regex pattern) is required for Regex method")
-		}
-	case "api":
-		if selector == "" {
-			return errors.New("selector (API endpoint) is required for API method")
-		}
-	case "browser":
-		// Selector is optional for browser method
-	default:
-		return errors.New("invalid scraping method: " + method)
+// Delete removes a config by UUID.
+func (s *ScrapingConfigService) Delete(id string) error {
+	_, err := s.configRepo.GetByID(id)
+	if err != nil {
+		return errors.New("config not found")
+	}
+	if err := s.configRepo.Delete(id); err != nil {
+		return errors.New("failed to delete config")
 	}
 	return nil
 }

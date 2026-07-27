@@ -3,8 +3,6 @@ package service
 import (
 	"errors"
 
-	"github.com/marchelrn/scrapers/repository"
-
 	"github.com/robfig/cron/v3"
 
 	"github.com/marchelrn/scrapers/contract"
@@ -12,22 +10,21 @@ import (
 	"github.com/marchelrn/scrapers/models"
 )
 
-// SchedulerService handles scheduler business logic
-type SchedulerService struct {
-	schedulerRepo contract.SchedulerRepository
-	configRepo    contract.ConfigRepository
+// ScheduleService handles schedule business logic.
+type ScheduleService struct {
+	scheduleRepo contract.ScheduleRepository
+	configRepo   contract.ScrapingConfigRepository
 }
 
-// NewSchedulerService creates a new SchedulerService
-func ImplSchedulerService(schedulerRepo contract.SchedulerRepository, configRepo contract.ConfigRepository) contract.SchedulerService {
-	return &SchedulerService{
-		schedulerRepo: schedulerRepo,
-		configRepo:    configRepo,
+func ImplScheduleService(scheduleRepo contract.ScheduleRepository, configRepo contract.ScrapingConfigRepository) contract.ScheduleService {
+	return &ScheduleService{
+		scheduleRepo: scheduleRepo,
+		configRepo:   configRepo,
 	}
 }
 
-// Create validates and creates a new scheduler
-func (s *SchedulerService) Create(req dto.CreateSchedulerRequest) (*models.Scheduler, error) {
+// Create validates and creates a new schedule.
+func (s *ScheduleService) Create(req dto.CreateScheduleRequest) (*dto.ScheduleResponse, error) {
 	// Validate config exists
 	_, err := s.configRepo.GetByID(req.ConfigID)
 	if err != nil {
@@ -39,7 +36,7 @@ func (s *SchedulerService) Create(req dto.CreateSchedulerRequest) (*models.Sched
 		return nil, err
 	}
 
-	timezone := "Asia/Jakarta"
+	timezone := "Asia/Makassar"
 	if req.Timezone != "" {
 		timezone = req.Timezone
 	}
@@ -49,83 +46,89 @@ func (s *SchedulerService) Create(req dto.CreateSchedulerRequest) (*models.Sched
 		enabled = *req.Enabled
 	}
 
-	scheduler := &models.Scheduler{
+	schedule := &models.Schedule{
 		ConfigID:       req.ConfigID,
 		CronExpression: req.CronExpression,
 		Timezone:       timezone,
 		Enabled:        enabled,
 	}
 
-	if err := s.schedulerRepo.Create(scheduler); err != nil {
-		return nil, errors.New("failed to create scheduler")
+	if err := s.scheduleRepo.Create(schedule); err != nil {
+		return nil, errors.New("failed to create schedule")
 	}
 
-	return scheduler, nil
+	resp := dto.ToScheduleResponse(*schedule)
+	return &resp, nil
 }
 
-// GetAll retrieves all schedulers, optionally filtered by config_id
-func (s *SchedulerService) GetAll(configID *int) ([]models.Scheduler, error) {
-	return s.schedulerRepo.GetAll(configID)
+// GetAll retrieves all schedules, optionally filtered by config_id.
+func (s *ScheduleService) GetAll(configID *string) ([]dto.ScheduleResponse, error) {
+	schedules, err := s.scheduleRepo.GetAll(configID)
+	if err != nil {
+		return nil, errors.New("failed to get schedules")
+	}
+
+	responses := make([]dto.ScheduleResponse, 0, len(schedules))
+	for _, sch := range schedules {
+		responses = append(responses, dto.ToScheduleResponse(sch))
+	}
+	return responses, nil
 }
 
-// GetByID retrieves a scheduler by ID
-func (s *SchedulerService) GetByID(id int) (*models.Scheduler, error) {
-	scheduler, err := s.schedulerRepo.GetByID(id)
+// GetByID retrieves a schedule by ID.
+func (s *ScheduleService) GetByID(id int) (*dto.ScheduleResponse, error) {
+	schedule, err := s.scheduleRepo.GetByID(id)
 	if err != nil {
-		return nil, errors.New("scheduler not found")
+		return nil, errors.New("schedule not found")
 	}
-	return scheduler, nil
+	resp := dto.ToScheduleResponse(*schedule)
+	return &resp, nil
 }
 
-// Update validates and updates a scheduler
-func (s *SchedulerService) Update(id int, req dto.UpdateSchedulerRequest) (*models.Scheduler, error) {
-	// Validate config exists
-	_, err := s.configRepo.GetByID(req.ConfigID)
+// Update validates and updates a schedule.
+func (s *ScheduleService) Update(id int, req dto.UpdateScheduleRequest) (*dto.ScheduleResponse, error) {
+	schedule, err := s.scheduleRepo.GetByID(id)
 	if err != nil {
-		return nil, errors.New("scraping config not found")
+		return nil, errors.New("schedule not found")
 	}
 
-	// Validate cron expression
-	if err := s.validateCronExpression(req.CronExpression); err != nil {
-		return nil, err
+	if req.CronExpression != nil {
+		if err := s.validateCronExpression(*req.CronExpression); err != nil {
+			return nil, err
+		}
+		schedule.CronExpression = *req.CronExpression
 	}
 
-	scheduler, err := s.schedulerRepo.GetByID(id)
-	if err != nil {
-		return nil, errors.New("scheduler not found")
-	}
-
-	scheduler.ConfigID = req.ConfigID
-	scheduler.CronExpression = req.CronExpression
-
-	if req.Timezone != "" {
-		scheduler.Timezone = req.Timezone
+	if req.Timezone != nil {
+		schedule.Timezone = *req.Timezone
 	}
 
 	if req.Enabled != nil {
-		scheduler.Enabled = *req.Enabled
+		schedule.Enabled = *req.Enabled
 	}
 
-	if err := s.schedulerRepo.Update(scheduler); err != nil {
-		return nil, errors.New("failed to update scheduler")
+	if err := s.scheduleRepo.Update(schedule); err != nil {
+		return nil, errors.New("failed to update schedule")
 	}
 
-	return scheduler, nil
+	resp := dto.ToScheduleResponse(*schedule)
+	return &resp, nil
 }
 
-// Delete removes a scheduler by ID
-func (s *SchedulerService) Delete(id int) error {
-	if err := s.schedulerRepo.Delete(id); err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
-			return errors.New("scheduler not found")
-		}
-		return errors.New("failed to delete scheduler")
+// Delete removes a schedule by ID.
+func (s *ScheduleService) Delete(id int) error {
+	_, err := s.scheduleRepo.GetByID(id)
+	if err != nil {
+		return errors.New("schedule not found")
+	}
+	if err := s.scheduleRepo.Delete(id); err != nil {
+		return errors.New("failed to delete schedule")
 	}
 	return nil
 }
 
-// validateCronExpression checks if a cron expression is valid using robfig/cron
-func (s *SchedulerService) validateCronExpression(expression string) error {
+// validateCronExpression checks if a cron expression is valid using robfig/cron.
+func (s *ScheduleService) validateCronExpression(expression string) error {
 	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
 	_, err := parser.Parse(expression)
 	if err != nil {

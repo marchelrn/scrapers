@@ -9,10 +9,11 @@ func New(repo *contract.Repository) *contract.Service {
 	cfg := config.Load()
 
 	return &contract.Service{
-		Auth:      ImplAuthService(repo.User, cfg),
-		Project:   ImplProjectService(repo.Project),
-		Website:   ImplWebsiteService(repo.Website, repo.Project),
-		Config:    ImplConfigService(repo.Config, repo.Website),
-		Scheduler: ImplSchedulerService(repo.Scheduler, repo.Config),
+		Auth:           ImplAuthService(repo.User, cfg),
+		ScraperType:    ImplScraperTypeService(repo.ScraperType),
+		ScrapingConfig: ImplScrapingConfigService(repo.ScrapingConfig, repo.ConfigParameter, repo.ScraperType),
+		Schedule:       ImplScheduleService(repo.Schedule, repo.ScrapingConfig),
+		ScrapingJob:    ImplScrapingJobService(repo.ScrapingJob, repo.ScrapingLog, repo.ScrapingResult, repo.ScrapingConfig),
+		Dashboard:      ImplDashboardService(repo.Dashboard),
 	}
 }

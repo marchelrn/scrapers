@@ -20,7 +20,7 @@ type AuthService struct {
 	JwtExpiry time.Duration
 }
 
-// ImplAuthService NewAuthService creates a new AuthService
+// ImplAuthService creates a new AuthService
 func ImplAuthService(userRepo contract.UserRepository, cfg *config.Config) contract.AuthService {
 	return &AuthService{
 		UserRepo:  userRepo,
@@ -46,7 +46,7 @@ func (s *AuthService) Register(req dto.RegisterRequest) (*dto.UserResponse, erro
 	// Set default role if empty
 	role := req.Role
 	if role == "" {
-		role = "operator"
+		role = models.UserRoleOperator
 	}
 
 	user := &models.User{
@@ -60,29 +60,21 @@ func (s *AuthService) Register(req dto.RegisterRequest) (*dto.UserResponse, erro
 		return nil, errors.New("failed to create user")
 	}
 
-	return &dto.UserResponse{
-		ID:        user.ID,
-		Name:      user.Name,
-		Email:     user.Email,
-		Role:      user.Role,
-		CreatedAt: user.CreatedAt,
-	}, nil
+	resp := dto.ToUserResponse(*user)
+	return &resp, nil
 }
 
 // Login authenticates a user and returns a JWT token
 func (s *AuthService) Login(req dto.LoginRequest) (*dto.LoginResponse, error) {
-	// Find user by email
 	user, err := s.UserRepo.GetByEmail(req.Email)
 	if err != nil {
 		return nil, errors.New("invalid email or password")
 	}
 
-	// Verify password
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
 		return nil, errors.New("invalid email or password")
 	}
 
-	// Generate JWT token
 	token, err := s.generateToken(user)
 	if err != nil {
 		return nil, errors.New("failed to generate token")
@@ -90,26 +82,21 @@ func (s *AuthService) Login(req dto.LoginRequest) (*dto.LoginResponse, error) {
 
 	return &dto.LoginResponse{
 		Token: token,
-		User:  *user,
+		User:  dto.ToUserResponse(*user),
 	}, nil
 }
 
-// GetUserByID retrieves a user by ID (for /me endpoint)
+// GetUserByID retrieves a user by UUID string
 func (s *AuthService) GetUserByID(id int) (*dto.UserResponse, error) {
 	user, err := s.UserRepo.GetByID(id)
 	if err != nil {
 		return nil, errors.New("user not found")
 	}
-	return &dto.UserResponse{
-		ID:        user.ID,
-		Name:      user.Name,
-		Email:     user.Email,
-		Role:      user.Role,
-		CreatedAt: user.CreatedAt,
-	}, nil
+	resp := dto.ToUserResponse(*user)
+	return &resp, nil
 }
 
-// ValidateToken parses and validates a JWT token, returning the user ID
+// ValidateToken parses a JWT token, returning (userID string, role string, error)
 func (s *AuthService) ValidateToken(tokenString string) (int, string, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -127,8 +114,12 @@ func (s *AuthService) ValidateToken(tokenString string) (int, string, error) {
 		return 0, "", errors.New("invalid token claims")
 	}
 
-	userID := int(claims["user_id"].(float64))
-	role := claims["role"].(string)
+	userIDFloat, ok := claims["user_id"].(float64)
+	if !ok {
+		return 0, "", errors.New("invalid user_id in token")
+	}
+	userID := int(userIDFloat)
+	role, _ := claims["role"].(string)
 
 	return userID, role, nil
 }
