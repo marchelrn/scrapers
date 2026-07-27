@@ -5,36 +5,18 @@ import (
 )
 
 type Repository struct {
-	Config ConfigRepository
-	Project ProjectRepository
-	Scheduler SchedulerRepository
-	User UserRepository
-	Website WebsiteRepository
+	User                UserRepository
+	ScraperType         ScraperTypeRepository
+	ParameterDefinition ParameterDefinitionRepository
+	ScrapingConfig      ScrapingConfigRepository
+	ConfigParameter     ConfigParameterRepository
+	Schedule            ScheduleRepository
+	ScrapingJob         ScrapingJobRepository
+	ScrapingLog         ScrapingLogRepository
+	ScrapingResult      ScrapingResultRepository
 }
 
-type ConfigRepository interface {
-	Create(config *models.ScrapeConfig) error
-	GetAll(websiteID *int) ([]models.ScrapeConfig, error)
-	GetByID(id int) (*models.ScrapeConfig, error)
-	Update(config *models.ScrapeConfig) error
-	Delete(id int) error
-}
-
-type ProjectRepository interface {
-	Create(project *models.Project) error
-	GetAll() ([]models.Project, error)
-	GetByID(id int) (*models.Project, error)
-	Update(project *models.Project) error
-	Delete(id int) error
-}
-
-type SchedulerRepository interface {
-	Create(scheduler *models.Scheduler) error
-	GetAll(configID *int) ([]models.Scheduler, error)
-	GetByID(id int) (*models.Scheduler, error)
-	Update(scheduler *models.Scheduler) error
-	Delete(id int) error
-}
+// ── Users ────────────────────────────────────────────────────────────────────
 
 type UserRepository interface {
 	Create(user *models.User) error
@@ -43,11 +25,73 @@ type UserRepository interface {
 	GetAll() ([]models.User, error)
 }
 
-type WebsiteRepository interface {
-	Create(website *models.Website) error
-	GetAll(projectID *int) ([]models.Website, error)
-	GetByID(id int) (*models.Website, error)
-	Update(website *models.Website) error
+// ── Scraper Types ────────────────────────────────────────────────────────────
+
+type ScraperTypeRepository interface {
+	Create(scraperType *models.ScraperType) error
+	GetAll() ([]models.ScraperType, error)
+	GetByID(id int) (*models.ScraperType, error)
+	Update(scraperType *models.ScraperType) error
 	Delete(id int) error
 }
 
+// ── Parameter Definitions ────────────────────────────────────────────────────
+
+type ParameterDefinitionRepository interface {
+	Create(definition *models.ParameterDefinition) error
+	GetByScraperTypeID(scraperTypeID int) ([]models.ParameterDefinition, error)
+	GetByID(id int) (*models.ParameterDefinition, error)
+	Update(definition *models.ParameterDefinition) error
+	Delete(id int) error
+}
+
+// ── Scraping Configs ─────────────────────────────────────────────────────────
+
+type ScrapingConfigRepository interface {
+	Create(config *models.ScrapingConfig) error
+	GetAll() ([]models.ScrapingConfig, error)
+	GetByID(id string) (*models.ScrapingConfig, error)
+	Update(config *models.ScrapingConfig) error
+	Delete(id string) error
+}
+
+// ── Config Parameters ────────────────────────────────────────────────────────
+
+type ConfigParameterRepository interface {
+	Create(param *models.ConfigParameter) error
+	GetByConfigID(configID string) ([]models.ConfigParameter, error)
+	DeleteByConfigID(configID string) error
+}
+
+// ── Schedules ────────────────────────────────────────────────────────────────
+
+type ScheduleRepository interface {
+	Create(schedule *models.Schedule) error
+	GetAll(configID *string) ([]models.Schedule, error)
+	GetByID(id int) (*models.Schedule, error)
+	Update(schedule *models.Schedule) error
+	Delete(id int) error
+}
+
+// ── Scraping Jobs ────────────────────────────────────────────────────────────
+
+type ScrapingJobRepository interface {
+	Create(job *models.ScrapingJob) error
+	GetAll(configID *string) ([]models.ScrapingJob, error)
+	GetByID(id string) (*models.ScrapingJob, error)
+	Update(job *models.ScrapingJob) error
+}
+
+// ── Scraping Logs ────────────────────────────────────────────────────────────
+
+type ScrapingLogRepository interface {
+	Create(log *models.ScrapingLog) error
+	GetByJobID(jobID string) ([]models.ScrapingLog, error)
+}
+
+// ── Scraping Results ─────────────────────────────────────────────────────────
+
+type ScrapingResultRepository interface {
+	Create(result *models.ScrapingResult) error
+	GetByJobID(jobID string) ([]models.ScrapingResult, error)
+}

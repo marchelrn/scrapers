@@ -2,16 +2,17 @@ package contract
 
 import (
 	"github.com/marchelrn/scrapers/dto"
-	"github.com/marchelrn/scrapers/models"
 )
 
 type Service struct {
-	Auth      AuthService
-	Config    ConfigService
-	Project   ProjectService
-	Scheduler SchedulerService
-	Website   WebsiteService
+	Auth           AuthService
+	ScraperType    ScraperTypeService
+	ScrapingConfig ScrapingConfigService
+	Schedule       ScheduleService
+	ScrapingJob    ScrapingJobService
 }
+
+// ── Auth ─────────────────────────────────────────────────────────────────────
 
 type AuthService interface {
 	Register(req dto.RegisterRequest) (*dto.UserResponse, error)
@@ -20,34 +21,43 @@ type AuthService interface {
 	ValidateToken(tokenString string) (int, string, error)
 }
 
-type ConfigService interface {
-	Create(req dto.CreateConfigRequest) (*dto.ResponseCreateConfigRequest, error)
-	GetAll(websiteID *int) (*dto.ResponseGetAllConfig, error)
-	GetByID(id int) (*dto.ResponseConfig, error)
-	Update(id int, req dto.UpdateConfigRequest) (*dto.ResponseUpdateConfigRequest, error)
+// ── Scraper Types ────────────────────────────────────────────────────────────
+
+type ScraperTypeService interface {
+	Create(req dto.CreateScraperTypeRequest) (*dto.ScraperTypeResponse, error)
+	GetAll() ([]dto.ScraperTypeResponse, error)
+	GetByID(id int) (*dto.ScraperTypeResponse, error)
+	Update(id int, req dto.UpdateScraperTypeRequest) (*dto.ScraperTypeResponse, error)
 	Delete(id int) error
 }
 
-type ProjectService interface {
-	Create(req dto.CreateProjectRequest, userID int) (*dto.ResponseCreateProjectRequest, error)
-	GetAll() (*dto.ResponseGetAllProject, error)
-	GetByID(id int) (*dto.ResponseProject, error)
-	Update(id int, req dto.UpdateProjectRequest) (*dto.ResponseUpdateProjectRequest, error)
+// ── Scraping Configs ─────────────────────────────────────────────────────────
+
+type ScrapingConfigService interface {
+	Create(req dto.CreateScrapingConfigRequest, userID int) (*dto.ScrapingConfigResponse, error)
+	GetAll() ([]dto.ScrapingConfigResponse, error)
+	GetByID(id string) (*dto.ScrapingConfigResponse, error)
+	Update(id string, req dto.UpdateScrapingConfigRequest) (*dto.ScrapingConfigResponse, error)
+	Delete(id string) error
+}
+
+// ── Schedules ────────────────────────────────────────────────────────────────
+
+type ScheduleService interface {
+	Create(req dto.CreateScheduleRequest) (*dto.ScheduleResponse, error)
+	GetAll(configID *string) ([]dto.ScheduleResponse, error)
+	GetByID(id int) (*dto.ScheduleResponse, error)
+	Update(id int, req dto.UpdateScheduleRequest) (*dto.ScheduleResponse, error)
 	Delete(id int) error
 }
 
-type SchedulerService interface {
-	Create(req dto.CreateSchedulerRequest) (*models.Scheduler, error)
-	GetAll(configID *int) ([]models.Scheduler, error)
-	GetByID(id int) (*models.Scheduler, error)
-	Update(id int, req dto.UpdateSchedulerRequest) (*models.Scheduler, error)
-	Delete(id int) error
-}
+// ── Scraping Jobs ────────────────────────────────────────────────────────────
 
-type WebsiteService interface {
-	Create(req dto.CreateWebsiteRequest) (*models.Website, error)
-	GetAll(projectID *int) ([]models.Website, error)
-	GetByID(id int) (*models.Website, error)
-	Update(id int, req dto.UpdateWebsiteRequest) (*models.Website, error)
-	Delete(id int) error
+type ScrapingJobService interface {
+	Create(req dto.CreateScrapingJobRequest) (*dto.ScrapingJobResponse, error)
+	GetAll(configID *string) ([]dto.ScrapingJobResponse, error)
+	GetByID(id string) (*dto.ScrapingJobResponse, error)
+	UpdateStatus(id string, req dto.UpdateScrapingJobRequest) (*dto.ScrapingJobResponse, error)
+	AddLog(jobID string, req dto.CreateScrapingLogRequest) (*dto.ScrapingLogResponse, error)
+	AddResult(jobID string, req dto.CreateScrapingResultRequest) (*dto.ScrapingResultResponse, error)
 }
