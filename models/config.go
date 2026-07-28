@@ -13,7 +13,7 @@ type ScrapingConfig struct {
 	Name            string `json:"name" gorm:"column:name;not null"`
 	Description     *string `json:"description,omitempty" gorm:"column:description"`
 	ScraperTypeID   int `json:"scraper_type_id" gorm:"column:scraper_type_id;not null;index"`
-	CreatedBy       *int `json:"created_by,omitempty" gorm:"column:created_by;index"`
+	CreatedBy       *string `json:"created_by,omitempty" gorm:"column:created_by;type:uuid;index"`
 	Status          string `json:"status" gorm:"column:status;not null;default:active"`
 	ScheduleEnabled bool `json:"schedule_enabled" gorm:"column:schedule_enabled;default:false"`
 	CreatedAt       time.Time `json:"created_at" gorm:"column:created_at;autoCreateTime"`
