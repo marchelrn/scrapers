@@ -1,5 +1,4 @@
 -- +goose Up
-SELECT 'up SQL query';
 CREATE TABLE IF NOT EXISTS users
 (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -12,5 +11,4 @@ CREATE TABLE IF NOT EXISTS users
 
 
 -- +goose Down
-SELECT 'down SQL query';
 DROP TABLE IF EXISTS users;

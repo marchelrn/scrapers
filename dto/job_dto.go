@@ -46,12 +46,12 @@ type ScrapingResultResponse struct {
 
 // ScrapingJobResponse is returned for a job and optionally includes logs and results.
 type ScrapingJobResponse struct {
-	ID         string                  `json:"id"`
-	ConfigID   string                  `json:"config_id"`
-	Status     string                  `json:"status"`
-	StartedAt  *time.Time              `json:"started_at,omitempty"`
-	FinishedAt *time.Time              `json:"finished_at,omitempty"`
-	WorkerName *string                 `json:"worker_name,omitempty"`
-	Logs       []ScrapingLogResponse   `json:"logs,omitempty"`
+	ID         string                   `json:"id"`
+	ConfigID   string                   `json:"config_id"`
+	Status     string                   `json:"status"`
+	StartedAt  *time.Time               `json:"started_at,omitempty"`
+	FinishedAt *time.Time               `json:"finished_at,omitempty"`
+	WorkerName *string                  `json:"worker_name,omitempty"`
+	Logs       []ScrapingLogResponse    `json:"logs,omitempty"`
 	Results    []ScrapingResultResponse `json:"results,omitempty"`
 }

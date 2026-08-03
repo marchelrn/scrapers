@@ -1,5 +1,4 @@
 -- +goose Up
-SELECT 'up SQL query';
 CREATE TABLE IF NOT EXISTS schedules
 (
     id              SERIAL PRIMARY KEY,
@@ -13,5 +12,4 @@ CREATE TABLE IF NOT EXISTS schedules
 CREATE INDEX idx_schedules_config_id ON schedules(config_id);
 
 -- +goose Down
-SELECT 'down SQL query';
 DROP TABLE IF EXISTS schedules;

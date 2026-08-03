@@ -20,19 +20,31 @@ func (r *ScheduleRepository) Create(m *models.Schedule) error {
 	return r.db.Create(m).Error
 }
 
-func (r *ScheduleRepository) GetAll(configID *string) ([]models.Schedule, error) {
+func (r *ScheduleRepository) GetAll(configID *string, userID string, userRole string) ([]models.Schedule, error) {
 	var ms []models.Schedule
-	query := r.db
+	query := r.db.Joins("JOIN scraping_configs ON schedules.config_id = scraping_configs.id")
+
 	if configID != nil {
-		query = query.Where("config_id = ?", *configID)
+		query = query.Where("schedules.config_id = ?", *configID)
 	}
+
+	if userRole != models.UserRoleAdmin {
+		query = query.Where("scraping_configs.created_by = ?", userID)
+	}
+
 	err := query.Find(&ms).Error
 	return ms, err
 }
 
-func (r *ScheduleRepository) GetByID(id int) (*models.Schedule, error) {
+func (r *ScheduleRepository) GetByID(id int, userID string, userRole string) (*models.Schedule, error) {
 	var m models.Schedule
-	err := r.db.First(&m, id).Error
+	query := r.db.Joins("JOIN scraping_configs ON schedules.config_id = scraping_configs.id").Where("schedules.id = ?", id)
+
+	if userRole != models.UserRoleAdmin {
+		query = query.Where("scraping_configs.created_by = ?", userID)
+	}
+
+	err := query.First(&m).Error
 	if err != nil {
 		return nil, err
 	}

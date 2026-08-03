@@ -1,6 +1,8 @@
 import sys
 import json
 import importlib
+import datetime
+from url_validator import validate_url
 
 # Map backend file definitions to our module names
 SCRAPER_MODULES = {
@@ -16,22 +18,48 @@ def execute_job(python_file, config_params):
     if not module_name:
         raise ValueError(f"Unknown scraper type: {python_file}")
 
+    target_url = config_params.get("url", "")
+    now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    # Replace +00:00 with Z if present for stricter ISO-8601 formatting
+    now_iso = now_iso.replace("+00:00", "Z")
+
     try:
+        # Validate URL before any network request
+        if target_url:
+            validate_url(target_url)
+
         # Dynamically load the scraper module
         scraper_module = importlib.import_module(module_name)
         
         # Call the scrape function
         results = scraper_module.scrape(config_params)
         
-        # Output results as JSON so the Go backend or calling script can parse it
+        # Output results as JSON matching the contract
         print(json.dumps({
             "status": "success",
-            "results": results
+            "method": "target_url",
+            "results": results,
+            "metadata": {
+                "source": target_url,
+                "fetched_at": now_iso,
+                "item_count": len(results) if isinstance(results, list) else 1
+            },
+            "error": None
         }))
     except Exception as e:
         print(json.dumps({
-            "status": "error",
-            "message": str(e)
+            "status": "failed",
+            "method": "target_url",
+            "results": [],
+            "metadata": {
+                "source": target_url,
+                "fetched_at": now_iso,
+                "item_count": 0
+            },
+            "error": {
+                "code": "EXECUTION_ERROR",
+                "message": str(e)
+            }
         }))
         sys.exit(1)
 
@@ -46,7 +74,21 @@ if __name__ == "__main__":
     try:
         params = json.loads(params_str)
     except json.JSONDecodeError:
-        print(json.dumps({"status": "error", "message": "Invalid JSON params"}))
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
+        print(json.dumps({
+            "status": "failed",
+            "method": "target_url",
+            "results": [],
+            "metadata": {
+                "source": "",
+                "fetched_at": now_iso,
+                "item_count": 0
+            },
+            "error": {
+                "code": "VALIDATION_ERROR",
+                "message": "Invalid JSON params"
+            }
+        }))
         sys.exit(1)
         
     execute_job(p_file, params)

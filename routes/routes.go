@@ -45,14 +45,11 @@ func SetupRoutes(s *contract.Service) *gin.Engine {
 	protected := r.Group("")
 	protected.Use(middleware.AuthMiddleware(s.Auth))
 	{
-		// Scraper Types
-		scraperTypes := protected.Group("/scraper-types")
+		// Methods (from registry)
+		methods := protected.Group("/methods")
 		{
-			scraperTypes.GET("", controllers.ScraperType.GetAll)
-			scraperTypes.POST("", controllers.ScraperType.Create)
-			scraperTypes.GET("/:id", controllers.ScraperType.GetByID)
-			scraperTypes.PUT("/:id", controllers.ScraperType.Update)
-			scraperTypes.DELETE("/:id", controllers.ScraperType.Delete)
+			methodCtrl := handler.NewMethodController()
+			methods.GET("", methodCtrl.GetAll)
 		}
 
 		// Scraping Configs
@@ -81,15 +78,28 @@ func SetupRoutes(s *contract.Service) *gin.Engine {
 			jobs.GET("", controllers.Job.GetAll)
 			jobs.POST("", controllers.Job.Create)
 			jobs.GET("/:id", controllers.Job.GetByID)
-			jobs.PUT("/:id", controllers.Job.UpdateStatus)
-			jobs.POST("/:id/logs", controllers.Job.AddLog)
-			jobs.POST("/:id/results", controllers.Job.AddResult)
 		}
 
 		// Dashboard
 		dashboard := protected.Group("/dashboard")
 		{
 			dashboard.GET("/summary", controllers.Dashboard.GetSummary)
+		}
+
+		// Profile (Current User)
+		profile := protected.Group("/profile")
+		{
+			profile.PATCH("", controllers.User.UpdateProfile)
+		}
+
+		// Users (Admin Only)
+		users := protected.Group("/users")
+		users.Use(middleware.AdminOnly())
+		{
+			users.GET("", controllers.User.GetAll)
+			users.GET("/:id", controllers.User.GetByID)
+			users.PATCH("/:id", controllers.User.UpdateAsAdmin)
+			users.DELETE("/:id", controllers.User.Delete)
 		}
 	}
 

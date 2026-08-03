@@ -9,7 +9,7 @@ import (
 type CreateScrapingConfigRequest struct {
 	Name            string                   `json:"name" binding:"required,max=255"`
 	Description     *string                  `json:"description"`
-	ScraperTypeID   int                      `json:"scraper_type_id" binding:"required,gt=0"`
+	MethodCode      string                   `json:"method_code" binding:"required"`
 	Status          string                   `json:"status" binding:"omitempty,oneof=active inactive"`
 	ScheduleEnabled *bool                    `json:"schedule_enabled"`
 	Parameters      []ConfigParameterRequest `json:"parameters"`
@@ -17,11 +17,11 @@ type CreateScrapingConfigRequest struct {
 
 // UpdateScrapingConfigRequest updates mutable configuration fields. Nil values are not changed.
 type UpdateScrapingConfigRequest struct {
-	Name            *string                  `json:"name" binding:"omitempty,max=255"`
-	Description     *string                  `json:"description"`
-	ScraperTypeID   *int                     `json:"scraper_type_id" binding:"omitempty,gt=0"`
-	Status          *string                  `json:"status" binding:"omitempty,oneof=active inactive"`
-	ScheduleEnabled *bool                    `json:"schedule_enabled"`
+	Name            *string                   `json:"name" binding:"omitempty,max=255"`
+	Description     *string                   `json:"description"`
+	MethodCode      *string                   `json:"method_code"`
+	Status          *string                   `json:"status" binding:"omitempty,oneof=active inactive"`
+	ScheduleEnabled *bool                     `json:"schedule_enabled"`
 	Parameters      *[]ConfigParameterRequest `json:"parameters"`
 }
 
@@ -43,8 +43,8 @@ type ScrapingConfigResponse struct {
 	ID              string                    `json:"id"`
 	Name            string                    `json:"name"`
 	Description     *string                   `json:"description,omitempty"`
-	ScraperTypeID   int                       `json:"scraper_type_id"`
-	CreatedBy       *int                      `json:"created_by,omitempty"`
+	MethodCode      string                    `json:"method_code"`
+	CreatedBy       *string                   `json:"created_by,omitempty"`
 	Status          string                    `json:"status"`
 	ScheduleEnabled bool                      `json:"schedule_enabled"`
 	CreatedAt       time.Time                 `json:"created_at"`

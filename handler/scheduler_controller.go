@@ -26,7 +26,10 @@ func (h *ScheduleController) GetAll(c *gin.Context) {
 		configID = &cidStr
 	}
 
-	schedules, err := h.service.GetAll(configID)
+	userID, _ := c.Get("user_id")
+	userRole, _ := c.Get("user_role")
+
+	schedules, err := h.service.GetAll(configID, userID.(string), userRole.(string))
 	if err != nil {
 		response.InternalServerError(c, err.Error())
 		return
@@ -42,7 +45,10 @@ func (h *ScheduleController) Create(c *gin.Context) {
 		return
 	}
 
-	schedule, err := h.service.Create(req)
+	userID, _ := c.Get("user_id")
+	userRole, _ := c.Get("user_role")
+
+	schedule, err := h.service.Create(req, userID.(string), userRole.(string))
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -59,7 +65,10 @@ func (h *ScheduleController) GetByID(c *gin.Context) {
 		return
 	}
 
-	schedule, err := h.service.GetByID(id)
+	userID, _ := c.Get("user_id")
+	userRole, _ := c.Get("user_role")
+
+	schedule, err := h.service.GetByID(id, userID.(string), userRole.(string))
 	if err != nil {
 		response.NotFound(c, err.Error())
 		return
@@ -82,7 +91,10 @@ func (h *ScheduleController) Update(c *gin.Context) {
 		return
 	}
 
-	schedule, err := h.service.Update(id, req)
+	userID, _ := c.Get("user_id")
+	userRole, _ := c.Get("user_role")
+
+	schedule, err := h.service.Update(id, req, userID.(string), userRole.(string))
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -99,7 +111,10 @@ func (h *ScheduleController) Delete(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.Delete(id); err != nil {
+	userID, _ := c.Get("user_id")
+	userRole, _ := c.Get("user_role")
+
+	if err := h.service.Delete(id, userID.(string), userRole.(string)); err != nil {
 		response.NotFound(c, err.Error())
 		return
 	}

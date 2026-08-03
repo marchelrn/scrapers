@@ -1,5 +1,4 @@
 -- +goose Up
-SELECT 'up SQL query';
 CREATE TABLE IF NOT EXISTS scraper_types
 (
     id          SERIAL PRIMARY KEY,
@@ -18,5 +17,4 @@ INSERT INTO scraper_types (name, python_file, description) VALUES
     ('Headless', 'headless_scraper.py', 'Scraping menggunakan headless browser');
 
 -- +goose Down
-SELECT 'down SQL query';
 DROP TABLE IF EXISTS scraper_types;

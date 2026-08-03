@@ -9,11 +9,13 @@ import (
 
 // AuthController handles authentication HTTP requests.
 type AuthController struct {
-	service contract.AuthService
+	authService contract.AuthService
+	userSerivce contract.UserService
 }
 
 func (c *AuthController) InitService(s *contract.Service) {
-	c.service = s.Auth
+	c.authService = s.Auth
+	c.userSerivce = s.User
 }
 
 // Register handles user registration.
@@ -24,7 +26,7 @@ func (h *AuthController) Register(c *gin.Context) {
 		return
 	}
 
-	user, err := h.service.Register(req)
+	user, err := h.authService.Register(req)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -41,7 +43,7 @@ func (h *AuthController) Login(c *gin.Context) {
 		return
 	}
 
-	loginResp, err := h.service.Login(req)
+	loginResp, err := h.authService.Login(req)
 	if err != nil {
 		response.Unauthorized(c, err.Error())
 		return
@@ -58,7 +60,7 @@ func (h *AuthController) Me(c *gin.Context) {
 		return
 	}
 
-	user, err := h.service.GetUserByID(userID.(int))
+	user, err := h.userSerivce.GetUserByID(userID.(string))
 	if err != nil {
 		response.NotFound(c, err.Error())
 		return

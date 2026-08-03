@@ -1,5 +1,4 @@
 -- +goose Up
-SELECT 'up SQL query';
 CREATE TABLE IF NOT EXISTS scraping_logs
 (
     id         SERIAL PRIMARY KEY,
@@ -13,5 +12,4 @@ CREATE INDEX idx_scraping_logs_job_id ON scraping_logs(job_id);
 CREATE INDEX idx_scraping_logs_level ON scraping_logs(level);
 
 -- +goose Down
-SELECT 'down SQL query';
 DROP TABLE IF EXISTS scraping_logs;

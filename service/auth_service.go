@@ -6,11 +6,13 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 
 	"github.com/marchelrn/scrapers/config"
 	"github.com/marchelrn/scrapers/contract"
 	"github.com/marchelrn/scrapers/dto"
 	"github.com/marchelrn/scrapers/models"
+	errs "github.com/marchelrn/scrapers/pkg/error"
 )
 
 // AuthService handles authentication business logic
@@ -32,9 +34,16 @@ func ImplAuthService(userRepo contract.UserRepository, cfg *config.Config) contr
 // Register creates a new user account
 func (s *AuthService) Register(req dto.RegisterRequest) (*dto.UserResponse, error) {
 	// Check if email already exists
-	existing, _ := s.UserRepo.GetByEmail(req.Email)
-	if existing != nil {
-		return nil, errors.New("email already registered")
+	exists, err := s.UserRepo.GetByEmail(req.Email)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	if exists != nil {
+		return nil, errs.Conflict("user already registered, please login")
 	}
 
 	// Hash password
@@ -67,7 +76,7 @@ func (s *AuthService) Register(req dto.RegisterRequest) (*dto.UserResponse, erro
 // Login authenticates a user and returns a JWT token
 func (s *AuthService) Login(req dto.LoginRequest) (*dto.LoginResponse, error) {
 	user, err := s.UserRepo.GetByEmail(req.Email)
-	if err != nil {
+	if err != nil || user == nil {
 		return nil, errors.New("invalid email or password")
 	}
 
@@ -81,13 +90,16 @@ func (s *AuthService) Login(req dto.LoginRequest) (*dto.LoginResponse, error) {
 	}
 
 	return &dto.LoginResponse{
-		Token: token,
-		User:  dto.ToUserResponse(*user),
+		Token: dto.Token{
+			Token:   token,
+			Expires: time.Now().Add(s.JwtExpiry),
+		},
+		User: dto.ToUserResponse(*user),
 	}, nil
 }
 
-// GetUserByID retrieves a user by UUID string
-func (s *AuthService) GetUserByID(id int) (*dto.UserResponse, error) {
+// GetserByID retrieves a user by UUID string
+func (s *AuthService) GetUserByID(id string) (*dto.UserResponse, error) {
 	user, err := s.UserRepo.GetByID(id)
 	if err != nil {
 		return nil, errors.New("user not found")
@@ -97,7 +109,7 @@ func (s *AuthService) GetUserByID(id int) (*dto.UserResponse, error) {
 }
 
 // ValidateToken parses a JWT token, returning (userID string, role string, error)
-func (s *AuthService) ValidateToken(tokenString string) (int, string, error) {
+func (s *AuthService) ValidateToken(tokenString string) (string, string, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.New("unexpected signing method")
@@ -106,19 +118,18 @@ func (s *AuthService) ValidateToken(tokenString string) (int, string, error) {
 	})
 
 	if err != nil || !token.Valid {
-		return 0, "", errors.New("invalid token")
+		return "", "", errors.New("invalid token")
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
-		return 0, "", errors.New("invalid token claims")
+		return "", "", errors.New("invalid token claims")
 	}
 
-	userIDFloat, ok := claims["user_id"].(float64)
+	userID, ok := claims["user_id"].(string)
 	if !ok {
-		return 0, "", errors.New("invalid user_id in token")
+		return "", "", errors.New("invalid user_id in token")
 	}
-	userID := int(userIDFloat)
 	role, _ := claims["role"].(string)
 
 	return userID, role, nil

@@ -13,29 +13,7 @@ func ToUserResponse(user models.User) UserResponse {
 	}
 }
 
-func ToScraperTypeResponse(scraperType models.ScraperType) ScraperTypeResponse {
-	return ScraperTypeResponse{
-		ID:          scraperType.ID,
-		Name:        scraperType.Name,
-		PythonFile:  scraperType.PythonFile,
-		Description: scraperType.Description,
-		IsActive:    scraperType.IsActive,
-	}
-}
-
-func ToParameterDefinitionResponse(definition models.ParameterDefinition) ParameterDefinitionResponse {
-	return ParameterDefinitionResponse{
-		ID:            definition.ID,
-		ScraperTypeID: definition.ScraperTypeID,
-		ParameterName: definition.ParameterName,
-		Label:         definition.Label,
-		DataType:      definition.DataType,
-		Required:      definition.Required,
-		DefaultValue:  definition.DefaultValue,
-		Placeholder:   definition.Placeholder,
-	}
-}
-
+// ToConfigParameterResponse converts a parameter to response.
 func ToConfigParameterResponse(parameter models.ConfigParameter) ConfigParameterResponse {
 	return ConfigParameterResponse{
 		ID:             parameter.ID,
@@ -49,7 +27,7 @@ func ToScrapingConfigResponse(config models.ScrapingConfig) ScrapingConfigRespon
 		ID:              config.ID,
 		Name:            config.Name,
 		Description:     config.Description,
-		ScraperTypeID:   config.ScraperTypeID,
+		MethodCode:      config.MethodCode,
 		CreatedBy:       config.CreatedBy,
 		Status:          config.Status,
 		ScheduleEnabled: config.ScheduleEnabled,

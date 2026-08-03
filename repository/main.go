@@ -7,15 +7,13 @@ import (
 
 func New(db *gorm.DB) *contract.Repository {
 	return &contract.Repository{
-		User:                ImplUserRepository(db),
-		ScraperType:         ImplScraperTypeRepository(db),
-		ParameterDefinition: ImplParameterDefinitionRepository(db),
-		ScrapingConfig:      ImplScrapingConfigRepository(db),
-		ConfigParameter:     ImplConfigParameterRepository(db),
-		Schedule:            ImplScheduleRepository(db),
-		ScrapingJob:         ImplScrapingJobRepository(db),
-		ScrapingLog:         ImplScrapingLogRepository(db),
-		ScrapingResult:      ImplScrapingResultRepository(db),
-		Dashboard:           ImplDashboardRepository(db),
+		User:            ImplUserRepository(db),
+		ScrapingConfig:  ImplScrapingConfigRepository(db),
+		ConfigParameter: ImplConfigParameterRepository(db),
+		Schedule:        ImplScheduleRepository(db),
+		ScrapingJob:     ImplScrapingJobRepository(db),
+		ScrapingLog:     ImplScrapingLogRepository(db),
+		ScrapingResult:  ImplScrapingResultRepository(db),
+		Dashboard:       ImplDashboardRepository(db),
 	}
 }

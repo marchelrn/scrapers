@@ -8,3 +8,4 @@ sql/
 goose
 workers/python/__pycache__
 workers/python/venv
+docs/*.md

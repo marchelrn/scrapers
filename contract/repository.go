@@ -5,16 +5,14 @@ import (
 )
 
 type Repository struct {
-	User                UserRepository
-	ScraperType         ScraperTypeRepository
-	ParameterDefinition ParameterDefinitionRepository
-	ScrapingConfig      ScrapingConfigRepository
-	ConfigParameter     ConfigParameterRepository
-	Schedule            ScheduleRepository
-	ScrapingJob         ScrapingJobRepository
-	ScrapingLog         ScrapingLogRepository
-	ScrapingResult      ScrapingResultRepository
-	Dashboard           DashboardRepository
+	User            UserRepository
+	ScrapingConfig  ScrapingConfigRepository
+	ConfigParameter ConfigParameterRepository
+	Schedule        ScheduleRepository
+	ScrapingJob     ScrapingJobRepository
+	ScrapingLog     ScrapingLogRepository
+	ScrapingResult  ScrapingResultRepository
+	Dashboard       DashboardRepository
 }
 
 // ── Users ────────────────────────────────────────────────────────────────────
@@ -22,36 +20,19 @@ type Repository struct {
 type UserRepository interface {
 	Create(user *models.User) error
 	GetByEmail(email string) (*models.User, error)
-	GetByID(id int) (*models.User, error)
+	GetByID(id string) (*models.User, error)
 	GetAll() ([]models.User, error)
-}
-
-// ── Scraper Types ────────────────────────────────────────────────────────────
-
-type ScraperTypeRepository interface {
-	Create(scraperType *models.ScraperType) error
-	GetAll() ([]models.ScraperType, error)
-	GetByID(id int) (*models.ScraperType, error)
-	Update(scraperType *models.ScraperType) error
-	Delete(id int) error
-}
-
-// ── Parameter Definitions ────────────────────────────────────────────────────
-
-type ParameterDefinitionRepository interface {
-	Create(definition *models.ParameterDefinition) error
-	GetByScraperTypeID(scraperTypeID int) ([]models.ParameterDefinition, error)
-	GetByID(id int) (*models.ParameterDefinition, error)
-	Update(definition *models.ParameterDefinition) error
-	Delete(id int) error
+	Update(id string, model *models.User) (*models.User, error)
+	Delete(id string) error
 }
 
 // ── Scraping Configs ─────────────────────────────────────────────────────────
 
 type ScrapingConfigRepository interface {
 	Create(config *models.ScrapingConfig) error
-	GetAll() ([]models.ScrapingConfig, error)
-	GetByID(id string) (*models.ScrapingConfig, error)
+	CreateWithParams(config *models.ScrapingConfig, params []models.ConfigParameter) error
+	GetAll(userID string, userRole string) ([]models.ScrapingConfig, error)
+	GetByID(id string, userID string, userRole string) (*models.ScrapingConfig, error)
 	Update(config *models.ScrapingConfig) error
 	Delete(id string) error
 }
@@ -68,8 +49,8 @@ type ConfigParameterRepository interface {
 
 type ScheduleRepository interface {
 	Create(schedule *models.Schedule) error
-	GetAll(configID *string) ([]models.Schedule, error)
-	GetByID(id int) (*models.Schedule, error)
+	GetAll(configID *string, userID string, userRole string) ([]models.Schedule, error)
+	GetByID(id int, userID string, userRole string) (*models.Schedule, error)
 	Update(schedule *models.Schedule) error
 	Delete(id int) error
 }
@@ -78,8 +59,8 @@ type ScheduleRepository interface {
 
 type ScrapingJobRepository interface {
 	Create(job *models.ScrapingJob) error
-	GetAll(configID *string) ([]models.ScrapingJob, error)
-	GetByID(id string) (*models.ScrapingJob, error)
+	GetAll(configID *string, userID string, userRole string) ([]models.ScrapingJob, error)
+	GetByID(id string, userID string, userRole string) (*models.ScrapingJob, error)
 	Update(job *models.ScrapingJob) error
 }
 

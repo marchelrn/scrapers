@@ -1,5 +1,4 @@
 -- +goose Up
-SELECT 'up SQL query';
 CREATE TABLE IF NOT EXISTS config_parameters
 (
     id              SERIAL PRIMARY KEY,
@@ -11,5 +10,4 @@ CREATE TABLE IF NOT EXISTS config_parameters
 CREATE INDEX idx_config_parameters_config_id ON config_parameters(config_id);
 
 -- +goose Down
-SELECT 'down SQL query';
 DROP TABLE IF EXISTS config_parameters;

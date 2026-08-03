@@ -1,38 +1,51 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 
 	"github.com/marchelrn/scrapers/contract"
 	"github.com/marchelrn/scrapers/dto"
 	"github.com/marchelrn/scrapers/models"
+	"github.com/marchelrn/scrapers/pkg/registry"
 )
 
 // ScrapingConfigService handles scraping configuration business logic.
 type ScrapingConfigService struct {
 	configRepo      contract.ScrapingConfigRepository
 	configParamRepo contract.ConfigParameterRepository
-	scraperTypeRepo contract.ScraperTypeRepository
 }
 
 func ImplScrapingConfigService(
 	configRepo contract.ScrapingConfigRepository,
 	configParamRepo contract.ConfigParameterRepository,
-	scraperTypeRepo contract.ScraperTypeRepository,
 ) contract.ScrapingConfigService {
 	return &ScrapingConfigService{
 		configRepo:      configRepo,
 		configParamRepo: configParamRepo,
-		scraperTypeRepo: scraperTypeRepo,
 	}
 }
 
 // Create validates and creates a new scraping config with its parameters.
-func (s *ScrapingConfigService) Create(req dto.CreateScrapingConfigRequest, userID int) (*dto.ScrapingConfigResponse, error) {
-	// Validate scraper type exists
-	_, err := s.scraperTypeRepo.GetByID(req.ScraperTypeID)
+func (s *ScrapingConfigService) Create(req dto.CreateScrapingConfigRequest, userID string) (*dto.ScrapingConfigResponse, error) {
+	// Validate method exists
+	method, err := registry.Get().GetMethod(req.MethodCode)
 	if err != nil {
-		return nil, errors.New("scraper type not found")
+		return nil, errors.New("method code not registered")
+	}
+
+	// Unmarshal and validate parameters
+	paramMap := make(map[string]interface{})
+	for _, p := range req.Parameters {
+		var val interface{}
+		if err := json.Unmarshal(p.ParameterValue, &val); err != nil {
+			return nil, errors.New("invalid json in parameter " + p.ParameterName)
+		}
+		paramMap[p.ParameterName] = val
+	}
+
+	if err := method.Validate(paramMap); err != nil {
+		return nil, errors.New("invalid parameters: " + err.Error())
 	}
 
 	status := models.ScrapingConfigStatusActive
@@ -48,32 +61,28 @@ func (s *ScrapingConfigService) Create(req dto.CreateScrapingConfigRequest, user
 	config := &models.ScrapingConfig{
 		Name:            req.Name,
 		Description:     req.Description,
-		ScraperTypeID:   req.ScraperTypeID,
+		MethodCode:      req.MethodCode,
 		CreatedBy:       &userID,
 		Status:          status,
 		ScheduleEnabled: scheduleEnabled,
 	}
 
-	if err := s.configRepo.Create(config); err != nil {
+	// Build parameter list
+	var configParams []models.ConfigParameter
+	for _, p := range req.Parameters {
+		configParams = append(configParams, models.ConfigParameter{
+			ParameterName:  p.ParameterName,
+			ParameterValue: p.ParameterValue,
+		})
+	}
+
+	// Atomic create config + params in one transaction
+	if err := s.configRepo.CreateWithParams(config, configParams); err != nil {
 		return nil, errors.New("failed to create config")
 	}
 
-	// Save parameters
-	if len(req.Parameters) > 0 {
-		for _, p := range req.Parameters {
-			param := &models.ConfigParameter{
-				ConfigID:       config.ID,
-				ParameterName:  p.ParameterName,
-				ParameterValue: p.ParameterValue,
-			}
-			if err := s.configParamRepo.Create(param); err != nil {
-				return nil, errors.New("failed to create config parameter")
-			}
-		}
-	}
-
 	// Reload with relations
-	created, err := s.configRepo.GetByID(config.ID)
+	created, err := s.configRepo.GetByID(config.ID, userID, models.UserRoleOperator) // Pass operator so it enforces check on creator
 	if err != nil {
 		return nil, errors.New("failed to reload config")
 	}
@@ -83,8 +92,8 @@ func (s *ScrapingConfigService) Create(req dto.CreateScrapingConfigRequest, user
 }
 
 // GetAll retrieves all scraping configs.
-func (s *ScrapingConfigService) GetAll() ([]dto.ScrapingConfigResponse, error) {
-	configs, err := s.configRepo.GetAll()
+func (s *ScrapingConfigService) GetAll(userID string, userRole string) ([]dto.ScrapingConfigResponse, error) {
+	configs, err := s.configRepo.GetAll(userID, userRole)
 	if err != nil {
 		return nil, errors.New("failed to get configs")
 	}
@@ -97,8 +106,8 @@ func (s *ScrapingConfigService) GetAll() ([]dto.ScrapingConfigResponse, error) {
 }
 
 // GetByID retrieves a config by UUID.
-func (s *ScrapingConfigService) GetByID(id string) (*dto.ScrapingConfigResponse, error) {
-	config, err := s.configRepo.GetByID(id)
+func (s *ScrapingConfigService) GetByID(id string, userID string, userRole string) (*dto.ScrapingConfigResponse, error) {
+	config, err := s.configRepo.GetByID(id, userID, userRole)
 	if err != nil {
 		return nil, errors.New("config not found")
 	}
@@ -107,8 +116,8 @@ func (s *ScrapingConfigService) GetByID(id string) (*dto.ScrapingConfigResponse,
 }
 
 // Update validates and updates a scraping config.
-func (s *ScrapingConfigService) Update(id string, req dto.UpdateScrapingConfigRequest) (*dto.ScrapingConfigResponse, error) {
-	config, err := s.configRepo.GetByID(id)
+func (s *ScrapingConfigService) Update(id string, req dto.UpdateScrapingConfigRequest, userID string, userRole string) (*dto.ScrapingConfigResponse, error) {
+	config, err := s.configRepo.GetByID(id, userID, userRole)
 	if err != nil {
 		return nil, errors.New("config not found")
 	}
@@ -119,12 +128,13 @@ func (s *ScrapingConfigService) Update(id string, req dto.UpdateScrapingConfigRe
 	if req.Description != nil {
 		config.Description = req.Description
 	}
-	if req.ScraperTypeID != nil {
-		// Validate scraper type exists
-		if _, err := s.scraperTypeRepo.GetByID(*req.ScraperTypeID); err != nil {
-			return nil, errors.New("scraper type not found")
+	if req.MethodCode != nil {
+		// Validate method exists
+		_, err := registry.Get().GetMethod(*req.MethodCode)
+		if err != nil {
+			return nil, errors.New("method code not registered")
 		}
-		config.ScraperTypeID = *req.ScraperTypeID
+		config.MethodCode = *req.MethodCode
 	}
 	if req.Status != nil {
 		config.Status = *req.Status
@@ -139,6 +149,25 @@ func (s *ScrapingConfigService) Update(id string, req dto.UpdateScrapingConfigRe
 
 	// Replace parameters if provided
 	if req.Parameters != nil {
+		// Validate against registry
+		method, err := registry.Get().GetMethod(config.MethodCode)
+		if err != nil {
+			return nil, errors.New("invalid method code on config")
+		}
+
+		paramMap := make(map[string]interface{})
+		for _, p := range *req.Parameters {
+			var val interface{}
+			if err := json.Unmarshal(p.ParameterValue, &val); err != nil {
+				return nil, errors.New("invalid json in parameter " + p.ParameterName)
+			}
+			paramMap[p.ParameterName] = val
+		}
+
+		if err := method.Validate(paramMap); err != nil {
+			return nil, errors.New("invalid parameters: " + err.Error())
+		}
+
 		if err := s.configParamRepo.DeleteByConfigID(id); err != nil {
 			return nil, errors.New("failed to clear old parameters")
 		}
@@ -155,7 +184,7 @@ func (s *ScrapingConfigService) Update(id string, req dto.UpdateScrapingConfigRe
 	}
 
 	// Reload
-	updated, err := s.configRepo.GetByID(id)
+	updated, err := s.configRepo.GetByID(id, userID, userRole)
 	if err != nil {
 		return nil, errors.New("failed to reload config")
 	}
@@ -165,8 +194,8 @@ func (s *ScrapingConfigService) Update(id string, req dto.UpdateScrapingConfigRe
 }
 
 // Delete removes a config by UUID.
-func (s *ScrapingConfigService) Delete(id string) error {
-	_, err := s.configRepo.GetByID(id)
+func (s *ScrapingConfigService) Delete(id string, userID string, userRole string) error {
+	_, err := s.configRepo.GetByID(id, userID, userRole)
 	if err != nil {
 		return errors.New("config not found")
 	}

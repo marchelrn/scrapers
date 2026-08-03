@@ -8,12 +8,15 @@ import (
 func New(repo *contract.Repository) *contract.Service {
 	cfg := config.Load()
 
+	jobSvc := ImplScrapingJobService(repo.ScrapingJob, repo.ScrapingLog, repo.ScrapingResult, repo.ScrapingConfig)
+	scheduleSvc := ImplScheduleService(repo.Schedule, repo.ScrapingConfig, jobSvc)
+
 	return &contract.Service{
 		Auth:           ImplAuthService(repo.User, cfg),
-		ScraperType:    ImplScraperTypeService(repo.ScraperType),
-		ScrapingConfig: ImplScrapingConfigService(repo.ScrapingConfig, repo.ConfigParameter, repo.ScraperType),
-		Schedule:       ImplScheduleService(repo.Schedule, repo.ScrapingConfig),
-		ScrapingJob:    ImplScrapingJobService(repo.ScrapingJob, repo.ScrapingLog, repo.ScrapingResult, repo.ScrapingConfig),
+		User:           ImplUserService(repo.User),
+		ScrapingConfig: ImplScrapingConfigService(repo.ScrapingConfig, repo.ConfigParameter),
+		Schedule:       scheduleSvc,
+		ScrapingJob:    jobSvc,
 		Dashboard:      ImplDashboardService(repo.Dashboard),
 	}
 }

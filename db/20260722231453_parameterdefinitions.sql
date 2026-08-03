@@ -1,5 +1,4 @@
 -- +goose Up
-SELECT 'up SQL query';
 CREATE TABLE IF NOT EXISTS parameter_definitions
 (
     id              SERIAL PRIMARY KEY,
@@ -44,5 +43,4 @@ INSERT INTO parameter_definitions (scraper_type_id, parameter_name, label, data_
     (5, 'attribute', 'Attribute', 'text', FALSE, 'text, href, src, etc.');
 
 -- +goose Down
-SELECT 'down SQL query';
 DROP TABLE IF EXISTS parameter_definitions;

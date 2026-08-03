@@ -38,6 +38,12 @@ func Run() {
 
 	repo := repository.New(db)
 	svc := service.New(repo)
+
+	// Start Scheduler
+	if err := svc.Schedule.StartScheduler(); err != nil {
+		log.Printf("Warning: failed to start scheduler: %v", err)
+	}
+
 	r := routes.SetupRoutes(svc)
 
 	if err := r.Run(addr); err != nil {

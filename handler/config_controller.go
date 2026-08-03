@@ -19,7 +19,10 @@ func (ctrl *ScrapingConfigController) InitService(s *contract.Service) {
 
 // GetAll retrieves all scraping configs.
 func (h *ScrapingConfigController) GetAll(c *gin.Context) {
-	configs, err := h.service.GetAll()
+	userID, _ := c.Get("user_id")
+	userRole, _ := c.Get("user_role")
+
+	configs, err := h.service.GetAll(userID.(string), userRole.(string))
 	if err != nil {
 		response.InternalServerError(c, err.Error())
 		return
@@ -42,7 +45,7 @@ func (h *ScrapingConfigController) Create(c *gin.Context) {
 		return
 	}
 
-	config, err := h.service.Create(req, userID.(int))
+	config, err := h.service.Create(req, userID.(string))
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -59,7 +62,10 @@ func (h *ScrapingConfigController) GetByID(c *gin.Context) {
 		return
 	}
 
-	config, err := h.service.GetByID(id)
+	userID, _ := c.Get("user_id")
+	userRole, _ := c.Get("user_role")
+
+	config, err := h.service.GetByID(id, userID.(string), userRole.(string))
 	if err != nil {
 		response.NotFound(c, err.Error())
 		return
@@ -82,7 +88,10 @@ func (h *ScrapingConfigController) Update(c *gin.Context) {
 		return
 	}
 
-	config, err := h.service.Update(id, req)
+	userID, _ := c.Get("user_id")
+	userRole, _ := c.Get("user_role")
+
+	config, err := h.service.Update(id, req, userID.(string), userRole.(string))
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -99,7 +108,10 @@ func (h *ScrapingConfigController) Delete(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.Delete(id); err != nil {
+	userID, _ := c.Get("user_id")
+	userRole, _ := c.Get("user_role")
+
+	if err := h.service.Delete(id, userID.(string), userRole.(string)); err != nil {
 		response.NotFound(c, err.Error())
 		return
 	}

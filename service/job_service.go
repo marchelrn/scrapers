@@ -1,14 +1,15 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
-	"os/exec"
 	"time"
 
 	"github.com/marchelrn/scrapers/contract"
 	"github.com/marchelrn/scrapers/dto"
 	"github.com/marchelrn/scrapers/models"
+	"github.com/marchelrn/scrapers/pkg/registry"
 )
 
 // ScrapingJobService handles scraping job business logic.
@@ -34,11 +35,11 @@ func ImplScrapingJobService(
 }
 
 // Create queues a new scraping job.
-func (s *ScrapingJobService) Create(req dto.CreateScrapingJobRequest) (*dto.ScrapingJobResponse, error) {
-	// Validate config exists
-	config, err := s.configRepo.GetByID(req.ConfigID)
+func (s *ScrapingJobService) Create(req dto.CreateScrapingJobRequest, userID string, userRole string) (*dto.ScrapingJobResponse, error) {
+	// Validate config exists and user owns it
+	config, err := s.configRepo.GetByID(req.ConfigID, userID, userRole)
 	if err != nil {
-		return nil, errors.New("scraping config not found")
+		return nil, errors.New("scraping config not found or unauthorized")
 	}
 
 	job := &models.ScrapingJob{
@@ -58,8 +59,8 @@ func (s *ScrapingJobService) Create(req dto.CreateScrapingJobRequest) (*dto.Scra
 }
 
 // GetAll retrieves all jobs, optionally filtered by config_id.
-func (s *ScrapingJobService) GetAll(configID *string) ([]dto.ScrapingJobResponse, error) {
-	jobs, err := s.jobRepo.GetAll(configID)
+func (s *ScrapingJobService) GetAll(configID *string, userID string, userRole string) ([]dto.ScrapingJobResponse, error) {
+	jobs, err := s.jobRepo.GetAll(configID, userID, userRole)
 	if err != nil {
 		return nil, errors.New("failed to get jobs")
 	}
@@ -72,10 +73,10 @@ func (s *ScrapingJobService) GetAll(configID *string) ([]dto.ScrapingJobResponse
 }
 
 // GetByID retrieves a job by UUID, including logs and results.
-func (s *ScrapingJobService) GetByID(id string) (*dto.ScrapingJobResponse, error) {
-	job, err := s.jobRepo.GetByID(id)
+func (s *ScrapingJobService) GetByID(id string, userID string, userRole string) (*dto.ScrapingJobResponse, error) {
+	job, err := s.jobRepo.GetByID(id, userID, userRole)
 	if err != nil {
-		return nil, errors.New("job not found")
+		return nil, errors.New("job not found or unauthorized")
 	}
 	resp := dto.ToScrapingJobResponse(*job)
 	return &resp, nil
@@ -83,13 +84,31 @@ func (s *ScrapingJobService) GetByID(id string) (*dto.ScrapingJobResponse, error
 
 // UpdateStatus updates the execution state of a job (used by workers).
 func (s *ScrapingJobService) UpdateStatus(id string, req dto.UpdateScrapingJobRequest) (*dto.ScrapingJobResponse, error) {
-	job, err := s.jobRepo.GetByID(id)
+	// Internal update bypasses ownership checks by using admin role
+	job, err := s.jobRepo.GetByID(id, "", models.UserRoleAdmin)
 	if err != nil {
 		return nil, errors.New("job not found")
 	}
 
 	if req.Status != nil {
-		job.Status = *req.Status
+		newStatus := *req.Status
+		// State transition validation
+		isValidTransition := false
+		switch job.Status {
+		case models.JobStatusPending:
+			if newStatus == models.JobStatusRunning || newStatus == models.JobStatusFailed {
+				isValidTransition = true
+			}
+		case models.JobStatusRunning:
+			if newStatus == models.JobStatusSuccess || newStatus == models.JobStatusFailed {
+				isValidTransition = true
+			}
+		}
+
+		if !isValidTransition {
+			return nil, errors.New("invalid status transition from " + job.Status + " to " + newStatus)
+		}
+		job.Status = newStatus
 	}
 	if req.StartedAt != nil {
 		job.StartedAt = req.StartedAt
@@ -111,8 +130,8 @@ func (s *ScrapingJobService) UpdateStatus(id string, req dto.UpdateScrapingJobRe
 
 // AddLog adds a log entry to a job.
 func (s *ScrapingJobService) AddLog(jobID string, req dto.CreateScrapingLogRequest) (*dto.ScrapingLogResponse, error) {
-	// Validate job exists
-	_, err := s.jobRepo.GetByID(jobID)
+	// Validate job exists, bypass ownership check for internal worker
+	_, err := s.jobRepo.GetByID(jobID, "", models.UserRoleAdmin)
 	if err != nil {
 		return nil, errors.New("job not found")
 	}
@@ -138,8 +157,8 @@ func (s *ScrapingJobService) AddLog(jobID string, req dto.CreateScrapingLogReque
 
 // AddResult persists JSONB output for a job.
 func (s *ScrapingJobService) AddResult(jobID string, req dto.CreateScrapingResultRequest) (*dto.ScrapingResultResponse, error) {
-	// Validate job exists
-	_, err := s.jobRepo.GetByID(jobID)
+	// Validate job exists, bypass ownership check for internal worker
+	_, err := s.jobRepo.GetByID(jobID, "", models.UserRoleAdmin)
 	if err != nil {
 		return nil, errors.New("job not found")
 	}
@@ -169,6 +188,22 @@ func (s *ScrapingJobService) executeJobAsync(jobID string, config *models.Scrapi
 		WorkerName: &workerName,
 	})
 
+	// Get method from registry
+	method, err := registry.Get().GetMethod(config.MethodCode)
+	if err != nil {
+		statusFailed := models.JobStatusFailed
+		now = time.Now()
+		s.UpdateStatus(jobID, dto.UpdateScrapingJobRequest{
+			Status:     &statusFailed,
+			FinishedAt: &now,
+		})
+		s.AddLog(jobID, dto.CreateScrapingLogRequest{
+			Level:   models.ScrapingLogLevelError,
+			Message: "Failed to get method from registry: " + err.Error(),
+		})
+		return
+	}
+
 	// Collect parameters
 	params := make(map[string]interface{})
 	for _, p := range config.Parameters {
@@ -176,32 +211,49 @@ func (s *ScrapingJobService) executeJobAsync(jobID string, config *models.Scrapi
 		_ = json.Unmarshal(p.ParameterValue, &val)
 		params[p.ParameterName] = val
 	}
-	paramsJSONBytes, _ := json.Marshal(params)
-	paramsJSON := string(paramsJSONBytes)
 
-	// Run command using venv python
-	pythonFile := config.ScraperType.PythonFile
-	cmd := exec.Command("workers/python/venv/bin/python", "workers/python/worker.py", pythonFile, paramsJSON)
-	
-	output, err := cmd.CombinedOutput()
-	
+	// Run command using registry method with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	workerResult, err := method.Execute(ctx, params)
 	now = time.Now()
-	if err != nil {
+
+	if err != nil || workerResult.Status != "success" {
 		statusFailed := models.JobStatusFailed
 		s.UpdateStatus(jobID, dto.UpdateScrapingJobRequest{
 			Status:     &statusFailed,
 			FinishedAt: &now,
 		})
+
+		errorMsg := "Execution failed"
+		if ctx.Err() == context.DeadlineExceeded {
+			errorMsg = "Execution timed out"
+		} else if err != nil {
+			errorMsg = "Execution error: " + err.Error()
+		} else if workerResult != nil && workerResult.Error != nil {
+			errorMsg = "Worker error: " + workerResult.Error.Message
+		}
+
 		s.AddLog(jobID, dto.CreateScrapingLogRequest{
 			Level:   models.ScrapingLogLevelError,
-			Message: "Execution failed: " + err.Error() + "\nOutput: " + string(output),
+			Message: errorMsg,
 		})
+
+		// Still save result if parseable even if failed
+		if workerResult != nil {
+			resBytes, _ := json.Marshal(workerResult)
+			s.AddResult(jobID, dto.CreateScrapingResultRequest{
+				ResultJSON: json.RawMessage(resBytes),
+			})
+		}
 		return
 	}
 
-	// Save raw output as JSON
+	// Save valid contract output
+	resBytes, _ := json.Marshal(workerResult)
 	s.AddResult(jobID, dto.CreateScrapingResultRequest{
-		ResultJSON: json.RawMessage(output),
+		ResultJSON: json.RawMessage(resBytes),
 	})
 
 	statusSuccess := models.JobStatusSuccess
@@ -209,10 +261,9 @@ func (s *ScrapingJobService) executeJobAsync(jobID string, config *models.Scrapi
 		Status:     &statusSuccess,
 		FinishedAt: &now,
 	})
-	
+
 	s.AddLog(jobID, dto.CreateScrapingLogRequest{
 		Level:   models.ScrapingLogLevelInfo,
 		Message: "Execution finished successfully",
 	})
 }
-

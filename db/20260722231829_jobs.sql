@@ -1,5 +1,4 @@
 -- +goose Up
-SELECT 'up SQL query';
 CREATE TABLE IF NOT EXISTS scraping_jobs
 (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -14,5 +13,4 @@ CREATE INDEX idx_scraping_jobs_config_id ON scraping_jobs(config_id);
 CREATE INDEX idx_scraping_jobs_status ON scraping_jobs(status);
 
 -- +goose Down
-SELECT 'down SQL query';
 DROP TABLE IF EXISTS scraping_jobs;
