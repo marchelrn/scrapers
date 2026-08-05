@@ -15,7 +15,10 @@ func (c *DashboardController) InitService(s *contract.Service) {
 }
 
 func (c *DashboardController) GetSummary(ctx *gin.Context) {
-	summary, err := c.service.GetSummary()
+	userID, _ := ctx.Get("user_id")
+	userRole, _ := ctx.Get("user_role")
+
+	summary, err := c.service.GetSummary(userID.(string), userRole.(string))
 	if err != nil {
 		response.InternalServerError(ctx, "Failed to get dashboard summary")
 		return

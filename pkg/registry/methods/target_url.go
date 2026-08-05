@@ -47,7 +47,7 @@ func (m *TargetURLMethod) ParameterDefinitions() []registry.ParameterDefinition 
 		{
 			Name:     "technique",
 			Label:    "Extraction Technique",
-			Type:     "text", // Should ideally be an enum/select: css, xpath, regex, api, headless
+			Type:     "text", // Should ideally be an enum/select: css, xpath, regex, api, headless, keyword_find
 			Required: true,
 			Default:  "css",
 		},
@@ -78,11 +78,24 @@ func (m *TargetURLMethod) ParameterDefinitions() []registry.ParameterDefinition 
 			Required: false,
 		},
 		{
+			Name:        "keyword",
+			Label:       "Keyword to Find",
+			Type:        "text",
+			Required:    false,
+			Placeholder: "e.g. Inflasi",
+		},
+		{
 			Name:     "auth_type",
 			Label:    "Authentication Type",
 			Type:     "text",
 			Required: true,
 			Default:  "none",
+		},
+		{
+			Name:     "secret_reference",
+			Label:    "Secret ID",
+			Type:     "text",
+			Required: false,
 		},
 	}
 }
@@ -114,6 +127,20 @@ func (m *TargetURLMethod) Validate(params map[string]interface{}) error {
 	}
 	technique := techniqueVal.(string)
 
+	// Validate Auth Type
+	authTypeVal, ok := params["auth_type"]
+	authType := "none"
+	if ok && authTypeVal != "" {
+		authType = authTypeVal.(string)
+	}
+
+	if authType != "none" {
+		secretRef, hasRef := params["secret_reference"]
+		if !hasRef || secretRef == "" {
+			return errors.New("parameter 'secret_reference' is required when auth_type is not none")
+		}
+	}
+
 	// Validate Technique specific parameters
 	switch technique {
 	case "css":
@@ -133,6 +160,10 @@ func (m *TargetURLMethod) Validate(params map[string]interface{}) error {
 	case "headless":
 		if sel, ok := params["selector"]; !ok || sel == "" {
 			return errors.New("parameter 'selector' is required for headless technique")
+		}
+	case "keyword_find":
+		if kw, ok := params["keyword"]; !ok || kw == "" {
+			return errors.New("parameter 'keyword' is required for keyword_find technique")
 		}
 	default:
 		return errors.New("unknown technique: " + technique)
@@ -161,6 +192,8 @@ func (m *TargetURLMethod) Execute(ctx context.Context, params map[string]interfa
 		pythonFile = "api_scraper.py"
 	case "headless":
 		pythonFile = "headless_scraper.py"
+	case "keyword_find":
+		pythonFile = "keyword_scraper.py"
 	}
 
 	paramsJSONBytes, err := json.Marshal(params)

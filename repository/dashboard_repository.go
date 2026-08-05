@@ -16,14 +16,20 @@ func ImplDashboardRepository(db *gorm.DB) contract.DashboardRepository {
 	return &dashboardRepository{db: db}
 }
 
-func (r *dashboardRepository) GetSummary() (*models.DashboardSummary, error) {
+func (r *dashboardRepository) GetSummary(userID string, userRole string) (*models.DashboardSummary, error) {
 	var summary models.DashboardSummary
 
+	baseJobQuery := r.db.Model(&models.ScrapingJob{})
+	if userRole != models.UserRoleAdmin {
+		baseJobQuery = baseJobQuery.Joins("JOIN scraping_configs ON scraping_jobs.config_id = scraping_configs.id").
+			Where("scraping_configs.created_by = ?", userID)
+	}
+
 	var activeWorkers int64
-	err := r.db.Model(&models.ScrapingJob{}).
-		Where("status = ?", models.JobStatusRunning).
-		Where("worker_name IS NOT NULL").
-		Distinct("worker_name").
+	err := baseJobQuery.Session(&gorm.Session{}).
+		Where("scraping_jobs.status = ?", models.JobStatusRunning).
+		Where("scraping_jobs.worker_name IS NOT NULL").
+		Distinct("scraping_jobs.worker_name").
 		Count(&activeWorkers).Error
 	if err != nil {
 		return nil, err
@@ -31,40 +37,46 @@ func (r *dashboardRepository) GetSummary() (*models.DashboardSummary, error) {
 	summary.ActiveWorkers = int(activeWorkers)
 
 	var running int64
-	r.db.Model(&models.ScrapingJob{}).Where("status = ?", models.JobStatusRunning).Count(&running)
+	baseJobQuery.Session(&gorm.Session{}).Where("scraping_jobs.status = ?", models.JobStatusRunning).Count(&running)
 	summary.RunningJobs = int(running)
 
 	var failed int64
-	r.db.Model(&models.ScrapingJob{}).Where("status = ?", models.JobStatusFailed).Count(&failed)
+	baseJobQuery.Session(&gorm.Session{}).Where("scraping_jobs.status = ?", models.JobStatusFailed).Count(&failed)
 	summary.FailedJobs = int(failed)
 
 	var success int64
-	r.db.Model(&models.ScrapingJob{}).Where("status = ?", models.JobStatusSuccess).Count(&success)
+	baseJobQuery.Session(&gorm.Session{}).Where("scraping_jobs.status = ?", models.JobStatusSuccess).Count(&success)
 	summary.SuccessfulJobs = int(success)
 
 	var pending int64
-	r.db.Model(&models.ScrapingJob{}).Where("status = ?", models.JobStatusPending).Count(&pending)
+	baseJobQuery.Session(&gorm.Session{}).Where("scraping_jobs.status = ?", models.JobStatusPending).Count(&pending)
 	summary.Queue = int(pending)
 
 	// Worker CPU mock (can be replaced with real metrics integration later)
 	summary.WorkerCPU = 0.0
 
 	var lastExecs []time.Time
-	r.db.Model(&models.ScrapingJob{}).
-		Where("finished_at IS NOT NULL").
-		Order("finished_at desc").
+	baseJobQuery.Session(&gorm.Session{}).
+		Where("scraping_jobs.finished_at IS NOT NULL").
+		Order("scraping_jobs.finished_at desc").
 		Limit(1).
-		Pluck("finished_at", &lastExecs)
+		Pluck("scraping_jobs.finished_at", &lastExecs)
 	if len(lastExecs) > 0 {
 		summary.LastExecution = &lastExecs[0]
 	}
 
+	baseScheduleQuery := r.db.Model(&models.Schedule{})
+	if userRole != models.UserRoleAdmin {
+		baseScheduleQuery = baseScheduleQuery.Joins("JOIN scraping_configs ON schedules.config_id = scraping_configs.id").
+			Where("scraping_configs.created_by = ?", userID)
+	}
+
 	var nextExecs []time.Time
-	r.db.Model(&models.Schedule{}).
-		Where("next_run > ?", time.Now()).
-		Order("next_run asc").
+	baseScheduleQuery.Session(&gorm.Session{}).
+		Where("schedules.next_run > ?", time.Now()).
+		Order("schedules.next_run asc").
 		Limit(1).
-		Pluck("next_run", &nextExecs)
+		Pluck("schedules.next_run", &nextExecs)
 	if len(nextExecs) > 0 {
 		summary.NextExecution = &nextExecs[0]
 	}

@@ -20,7 +20,7 @@ func (r *ScrapingJobRepository) Create(m *models.ScrapingJob) error {
 	return r.db.Create(m).Error
 }
 
-func (r *ScrapingJobRepository) GetAll(configID *string, userID string, userRole string) ([]models.ScrapingJob, error) {
+func (r *ScrapingJobRepository) GetAll(configID *string, userID string, userRole string, limit int, offset int) ([]models.ScrapingJob, error) {
 	var ms []models.ScrapingJob
 	query := r.db.Joins("JOIN scraping_configs ON scraping_jobs.config_id = scraping_configs.id")
 
@@ -30,6 +30,13 @@ func (r *ScrapingJobRepository) GetAll(configID *string, userID string, userRole
 
 	if userRole != models.UserRoleAdmin {
 		query = query.Where("scraping_configs.created_by = ?", userID)
+	}
+
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+	if offset > 0 {
+		query = query.Offset(offset)
 	}
 
 	err := query.Order("scraping_jobs.started_at DESC").Find(&ms).Error

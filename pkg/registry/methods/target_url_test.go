@@ -45,6 +45,16 @@ func TestTargetURLMethod_Validate(t *testing.T) {
 			expectError: false,
 		},
 		{
+			name:        "keyword missing keyword",
+			params:      map[string]interface{}{"url": "http://example.com", "technique": "keyword_find"},
+			expectError: true,
+		},
+		{
+			name:        "keyword valid",
+			params:      map[string]interface{}{"url": "http://example.com", "technique": "keyword_find", "keyword": "Inflasi"},
+			expectError: false,
+		},
+		{
 			name:        "unknown technique",
 			params:      map[string]interface{}{"url": "http://example.com", "technique": "invalid_tech"},
 			expectError: true,
@@ -68,6 +78,16 @@ func TestTargetURLMethod_Validate(t *testing.T) {
 			name:        "ssrf metadata blocked",
 			params:      map[string]interface{}{"url": "http://169.254.169.254/latest", "technique": "api"},
 			expectError: true,
+		},
+		{
+			name:        "auth missing secret",
+			params:      map[string]interface{}{"url": "http://api.example.com", "technique": "api", "auth_type": "api_key"},
+			expectError: true,
+		},
+		{
+			name:        "auth valid secret",
+			params:      map[string]interface{}{"url": "http://api.example.com", "technique": "api", "auth_type": "api_key", "secret_reference": "sec-123"},
+			expectError: false,
 		},
 	}
 

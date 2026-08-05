@@ -31,6 +31,11 @@ type ConfigParameterRequest struct {
 	ParameterValue json.RawMessage `json:"parameter_value" binding:"required"`
 }
 
+// RunConfigShortcutRequest is used to update parameters and instantly trigger a job.
+type RunConfigShortcutRequest struct {
+	Parameters []ConfigParameterRequest `json:"parameters" binding:"required"`
+}
+
 // ConfigParameterResponse is the public representation of a configuration parameter.
 type ConfigParameterResponse struct {
 	ID             int             `json:"id"`

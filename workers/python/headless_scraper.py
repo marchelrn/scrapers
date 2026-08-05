@@ -10,6 +10,11 @@ def scrape(config_params):
     url = config_params.get("url")
     selector = config_params.get("selector")
     
+    auth_type = config_params.get("auth_type", "none")
+    secret_value = config_params.get("_resolved_secret_value", "")
+    if isinstance(secret_value, str):
+        secret_value = secret_value.strip()
+    
     if not url or not selector:
         raise ValueError("Missing 'url' or 'selector' in config parameters")
 
@@ -19,14 +24,19 @@ def scrape(config_params):
         # Launch headless browser
         browser = p.chromium.launch(headless=True)
         
-        # Check if SSO Cookies are provided
-        cookies = config_params.get("cookies")
-        if cookies and isinstance(cookies, list):
-            context = browser.new_context()
-            context.add_cookies(cookies)
-            page = context.new_page()
-        else:
-            page = browser.new_page()
+        # Check if Auth Cookies are provided via secret
+        context = browser.new_context()
+        if auth_type == "cookie" and secret_value:
+            import json
+            try:
+                # We expect the secret_value to be a valid JSON array of cookie dicts
+                cookies = json.loads(secret_value)
+                if isinstance(cookies, list):
+                    context.add_cookies(cookies)
+            except Exception as e:
+                raise ValueError("Invalid cookie format in secret. Must be JSON array.")
+        
+        page = context.new_page()
         
         # Navigate and wait for network to be idle
         page.goto(url, wait_until="networkidle")

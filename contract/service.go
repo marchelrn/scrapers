@@ -11,6 +11,17 @@ type Service struct {
 	Schedule       ScheduleService
 	ScrapingJob    ScrapingJobService
 	Dashboard      DashboardService
+	Secret         SecretService
+}
+
+// ── Secrets ──────────────────────────────────────────────────────────────────
+
+type SecretService interface {
+	Create(req dto.CreateSecretRequest, userID string) (*dto.SecretResponse, error)
+	GetAll(userID string, userRole string) ([]dto.SecretResponse, error)
+	GetByID(id string, userID string, userRole string) (*dto.SecretResponse, error)
+	Update(id string, req dto.UpdateSecretRequest, userID string, userRole string) (*dto.SecretResponse, error)
+	Delete(id string, userID string, userRole string) error
 }
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
@@ -56,8 +67,10 @@ type ScheduleService interface {
 // ── Scraping Jobs ────────────────────────────────────────────────────────────
 
 type ScrapingJobService interface {
+	RecoverStuckJobs() error
 	Create(req dto.CreateScrapingJobRequest, userID string, userRole string) (*dto.ScrapingJobResponse, error)
-	GetAll(configID *string, userID string, userRole string) ([]dto.ScrapingJobResponse, error)
+	RunShortcut(configID string, req dto.RunConfigShortcutRequest, userID string, userRole string) (*dto.ScrapingJobResponse, error)
+	GetAll(configID *string, userID string, userRole string, limit int, offset int) ([]dto.ScrapingJobResponse, error)
 	GetByID(id string, userID string, userRole string) (*dto.ScrapingJobResponse, error)
 	UpdateStatus(id string, req dto.UpdateScrapingJobRequest) (*dto.ScrapingJobResponse, error)
 	AddLog(jobID string, req dto.CreateScrapingLogRequest) (*dto.ScrapingLogResponse, error)
@@ -67,5 +80,5 @@ type ScrapingJobService interface {
 // ── Dashboard ────────────────────────────────────────────────────────────────
 
 type DashboardService interface {
-	GetSummary() (*dto.DashboardSummaryResponse, error)
+	GetSummary(userID string, userRole string) (*dto.DashboardSummaryResponse, error)
 }

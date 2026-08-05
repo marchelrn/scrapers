@@ -18,7 +18,7 @@ type mockJobRepo struct {
 }
 
 func (m *mockJobRepo) Create(job *models.ScrapingJob) error { return nil }
-func (m *mockJobRepo) GetAll(configID *string, userID string, userRole string) ([]models.ScrapingJob, error) {
+func (m *mockJobRepo) GetAll(configID *string, userID string, userRole string, limit int, offset int) ([]models.ScrapingJob, error) {
 	return nil, nil
 }
 func (m *mockJobRepo) GetByID(id string, userID string, userRole string) (*models.ScrapingJob, error) {
@@ -51,6 +51,18 @@ func (m *mockConfigRepoForJob) GetByID(id string, userID string, userRole string
 }
 func (m *mockConfigRepoForJob) Update(config *models.ScrapingConfig) error { return nil }
 func (m *mockConfigRepoForJob) Delete(id string) error                     { return nil }
+
+type mockSecretRepoForJob struct{}
+
+func (m *mockSecretRepoForJob) Create(secret *models.Secret) error { return nil }
+func (m *mockSecretRepoForJob) GetAll(userID string, userRole string) ([]models.Secret, error) {
+	return nil, nil
+}
+func (m *mockSecretRepoForJob) GetByID(id string, userID string, userRole string) (*models.Secret, error) {
+	return nil, errors.New("not found")
+}
+func (m *mockSecretRepoForJob) Update(secret *models.Secret) error { return nil }
+func (m *mockSecretRepoForJob) Delete(id string) error             { return nil }
 
 func TestJobStatusTransition(t *testing.T) {
 	registry.Get().Register(methods.NewTargetURLMethod())
@@ -89,8 +101,10 @@ func TestJobStatusTransition(t *testing.T) {
 			}
 
 			svc := &ScrapingJobService{
-				jobRepo:    repo,
-				configRepo: &mockConfigRepoForJob{},
+				jobRepo:         repo,
+				configRepo:      &mockConfigRepoForJob{},
+				secretRepo:      &mockSecretRepoForJob{},
+				configParamRepo: &mockConfigParamRepo{},
 			}
 
 			next := tt.nextStatus

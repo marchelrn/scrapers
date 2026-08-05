@@ -13,6 +13,17 @@ type Repository struct {
 	ScrapingLog     ScrapingLogRepository
 	ScrapingResult  ScrapingResultRepository
 	Dashboard       DashboardRepository
+	Secret          SecretRepository
+}
+
+// ── Secrets ──────────────────────────────────────────────────────────────────
+
+type SecretRepository interface {
+	Create(secret *models.Secret) error
+	GetAll(userID string, userRole string) ([]models.Secret, error)
+	GetByID(id string, userID string, userRole string) (*models.Secret, error)
+	Update(secret *models.Secret) error
+	Delete(id string) error
 }
 
 // ── Users ────────────────────────────────────────────────────────────────────
@@ -59,7 +70,7 @@ type ScheduleRepository interface {
 
 type ScrapingJobRepository interface {
 	Create(job *models.ScrapingJob) error
-	GetAll(configID *string, userID string, userRole string) ([]models.ScrapingJob, error)
+	GetAll(configID *string, userID string, userRole string, limit int, offset int) ([]models.ScrapingJob, error)
 	GetByID(id string, userID string, userRole string) (*models.ScrapingJob, error)
 	Update(job *models.ScrapingJob) error
 }
@@ -81,5 +92,5 @@ type ScrapingResultRepository interface {
 // ── Dashboard ────────────────────────────────────────────────────────────────
 
 type DashboardRepository interface {
-	GetSummary() (*models.DashboardSummary, error)
+	GetSummary(userID string, userRole string) (*models.DashboardSummary, error)
 }

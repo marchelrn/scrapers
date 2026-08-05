@@ -13,8 +13,8 @@ func ImplDashboardService(repo contract.DashboardRepository) contract.DashboardS
 	return &dashboardService{repo: repo}
 }
 
-func (s *dashboardService) GetSummary() (*dto.DashboardSummaryResponse, error) {
-	summary, err := s.repo.GetSummary()
+func (s *dashboardService) GetSummary(userID string, userRole string) (*dto.DashboardSummaryResponse, error) {
+	summary, err := s.repo.GetSummary(userID, userRole)
 	if err != nil {
 		return nil, err
 	}

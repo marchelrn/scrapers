@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"strconv"
+
 	"github.com/gin-gonic/gin"
 
 	"github.com/marchelrn/scrapers/contract"
@@ -24,10 +26,24 @@ func (h *ScrapingJobController) GetAll(c *gin.Context) {
 		configID = &cidStr
 	}
 
+	limit := 50
+	if limitStr := c.Query("limit"); limitStr != "" {
+		if parsed, err := strconv.Atoi(limitStr); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+
+	offset := 0
+	if pageStr := c.Query("page"); pageStr != "" {
+		if page, err := strconv.Atoi(pageStr); err == nil && page > 0 {
+			offset = (page - 1) * limit
+		}
+	}
+
 	userID, _ := c.Get("user_id")
 	userRole, _ := c.Get("user_role")
 
-	jobs, err := h.service.GetAll(configID, userID.(string), userRole.(string))
+	jobs, err := h.service.GetAll(configID, userID.(string), userRole.(string), limit, offset)
 	if err != nil {
 		response.InternalServerError(c, err.Error())
 		return

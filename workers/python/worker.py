@@ -11,6 +11,8 @@ SCRAPER_MODULES = {
     "regex_scraper.py": "regex_scraper",
     "api_scraper.py": "api_scraper",
     "headless_scraper.py": "headless_scraper",
+    "keyword_scraper.py": "keyword_scraper",
+    "google_search_scraper.py": "google_search_scraper",
 }
 
 def execute_job(python_file, config_params):
@@ -47,6 +49,11 @@ def execute_job(python_file, config_params):
             "error": None
         }))
     except Exception as e:
+        # Avoid leaking secrets in error messages
+        error_msg = str(e)
+        if "_resolved_secret_value" in config_params and config_params["_resolved_secret_value"]:
+            error_msg = error_msg.replace(config_params["_resolved_secret_value"], "***REDACTED***")
+            
         print(json.dumps({
             "status": "failed",
             "method": "target_url",
@@ -58,7 +65,7 @@ def execute_job(python_file, config_params):
             },
             "error": {
                 "code": "EXECUTION_ERROR",
-                "message": str(e)
+                "message": error_msg
             }
         }))
         sys.exit(1)

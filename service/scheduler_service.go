@@ -97,13 +97,28 @@ func (s *ScheduleService) registerJobInternal(sch models.Schedule) {
 			return
 		}
 
-		// Dispatch job creation with internal executor bypass
-		req := dto.CreateScrapingJobRequest{ConfigID: sch.ConfigID}
-		_, err = s.jobSvc.Create(req, "", models.UserRoleAdmin)
-		if err != nil {
-			log.Printf("Failed to dispatch scheduled job for schedule %d: %v\n", sch.ID, err)
+		// Prevent duplicate execution: Check if there's already a pending/running job for this config
+		// We only fetch 10 active jobs to avoid large payload during checks
+		activeJobs, _ := s.jobSvc.GetAll(&sch.ConfigID, "", models.UserRoleAdmin, 10, 0)
+		hasActive := false
+		for _, j := range activeJobs {
+			if j.Status == models.JobStatusPending || j.Status == models.JobStatusRunning {
+				hasActive = true
+				break
+			}
+		}
+
+		if hasActive {
+			log.Printf("Schedule %d skipped: job for config %s is already pending/running\n", sch.ID, sch.ConfigID)
 		} else {
-			log.Printf("Successfully dispatched job for schedule %d\n", sch.ID)
+			// Dispatch job creation with internal executor bypass
+			req := dto.CreateScrapingJobRequest{ConfigID: sch.ConfigID}
+			_, err = s.jobSvc.Create(req, "", models.UserRoleAdmin)
+			if err != nil {
+				log.Printf("Failed to dispatch scheduled job for schedule %d: %v\n", sch.ID, err)
+			} else {
+				log.Printf("Successfully dispatched job for schedule %d\n", sch.ID)
+			}
 		}
 
 		// Calculate and update next_run

@@ -52,6 +52,23 @@ func SetupRoutes(s *contract.Service) *gin.Engine {
 			methods.GET("", methodCtrl.GetAll)
 		}
 
+		// Proxy for Visual Selector
+		proxy := protected.Group("/proxy")
+		{
+			proxyCtrl := handler.NewProxyController()
+			proxy.GET("", proxyCtrl.GetHTML)
+		}
+
+		// Secrets
+		secrets := protected.Group("/secrets")
+		{
+			secrets.GET("", controllers.Secret.GetAll)
+			secrets.POST("", controllers.Secret.Create)
+			secrets.GET("/:id", controllers.Secret.GetByID)
+			secrets.PUT("/:id", controllers.Secret.Update)
+			secrets.DELETE("/:id", controllers.Secret.Delete)
+		}
+
 		// Scraping Configs
 		configs := protected.Group("/configs")
 		{
@@ -60,6 +77,7 @@ func SetupRoutes(s *contract.Service) *gin.Engine {
 			configs.GET("/:id", controllers.Config.GetByID)
 			configs.PUT("/:id", controllers.Config.Update)
 			configs.DELETE("/:id", controllers.Config.Delete)
+			configs.POST("/:id/run", controllers.Config.RunShortcut)
 		}
 
 		// Schedules

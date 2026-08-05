@@ -46,6 +46,15 @@ func ConnectDB(cfg *config.Config) (*gorm.DB, *sql.DB) {
 		log.Fatalf("error connect sql. error : %v", err)
 	}
 	log.Println("success connect database")
+	log.Println(cfg.GinMode)
+
+	if cfg.GinMode == "test" || cfg.GinMode == "release" {
+		log.Println("using external database")
+	} else if cfg.DevMode == "true" {
+		log.Println("using supabase")
+	} else {
+		log.Println("using local database")
+	}
 
 	log.Println("set database connection configuration")
 	sqlDB, err := db.DB()

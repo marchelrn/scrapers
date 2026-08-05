@@ -51,13 +51,33 @@ func (m *mockScheduleRepo) Delete(id int) error {
 	return nil
 }
 
-type mockJobSvc struct{}
+type mockJobSvc struct {
+	jobs []dto.ScrapingJobResponse
+}
+
+func (m *mockJobSvc) RecoverStuckJobs() error { return nil }
 
 func (m *mockJobSvc) Create(req dto.CreateScrapingJobRequest, userID string, userRole string) (*dto.ScrapingJobResponse, error) {
-	return &dto.ScrapingJobResponse{}, nil
+	newJob := dto.ScrapingJobResponse{ID: "job-1", ConfigID: req.ConfigID, Status: models.JobStatusPending}
+	m.jobs = append(m.jobs, newJob)
+	return &newJob, nil
 }
-func (m *mockJobSvc) GetAll(configID *string, userID string, userRole string) ([]dto.ScrapingJobResponse, error) {
+
+func (m *mockJobSvc) RunShortcut(configID string, req dto.RunConfigShortcutRequest, userID string, userRole string) (*dto.ScrapingJobResponse, error) {
 	return nil, nil
+}
+
+func (m *mockJobSvc) GetAll(configID *string, userID string, userRole string, limit int, offset int) ([]dto.ScrapingJobResponse, error) {
+	if configID != nil {
+		var filtered []dto.ScrapingJobResponse
+		for _, j := range m.jobs {
+			if j.ConfigID == *configID {
+				filtered = append(filtered, j)
+			}
+		}
+		return filtered, nil
+	}
+	return m.jobs, nil
 }
 func (m *mockJobSvc) GetByID(id string, userID string, userRole string) (*dto.ScrapingJobResponse, error) {
 	return nil, nil
@@ -135,4 +155,56 @@ func TestScheduleLifecycle(t *testing.T) {
 	}
 
 	svc.StopScheduler()
+}
+
+func TestScheduleConcurrencyLock(t *testing.T) {
+	configID := "cfg-lock"
+	cfgRepo := &mockConfigRepo{
+		configs: []models.ScrapingConfig{
+			{ID: configID, Status: models.ScrapingConfigStatusActive, ScheduleEnabled: true},
+		},
+	}
+
+	schRepo := &mockScheduleRepo{}
+	jobSvc := &mockJobSvc{}
+
+	// Add an existing running job to the mock
+	jobSvc.jobs = append(jobSvc.jobs, dto.ScrapingJobResponse{
+		ID:       "existing-job",
+		ConfigID: configID,
+		Status:   models.JobStatusRunning,
+	})
+
+	svc := ImplScheduleService(schRepo, cfgRepo, jobSvc)
+
+	sch := models.Schedule{
+		ID:             99,
+		ConfigID:       configID,
+		CronExpression: "*/1 * * * *",
+		Enabled:        true,
+		Timezone:       "Asia/Makassar",
+	}
+
+	// This should run but NOT create a new job because one is already running
+	s := svc.(*ScheduleService)
+	s.cronRunner.Start()
+	s.registerJobInternal(sch)
+
+	// Trigger the job func manually to test the logic
+	entry := s.cronRunner.Entries()[0]
+	entry.Job.Run()
+
+	if len(jobSvc.jobs) != 1 {
+		t.Errorf("expected 1 job, got %d. Duplicate execution lock failed", len(jobSvc.jobs))
+	}
+
+	// Now simulate job finishing
+	jobSvc.jobs[0].Status = models.JobStatusSuccess
+	entry.Job.Run()
+
+	if len(jobSvc.jobs) != 2 {
+		t.Errorf("expected 2 jobs, got %d. Lock did not release after job success", len(jobSvc.jobs))
+	}
+
+	s.StopScheduler()
 }

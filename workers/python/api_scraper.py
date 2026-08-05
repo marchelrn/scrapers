@@ -14,6 +14,18 @@ def scrape(config_params):
     json_path = config_params.get("json_path", "")
     headers = config_params.get("headers", {})
     
+    auth_type = config_params.get("auth_type", "none")
+    secret_value = config_params.get("_resolved_secret_value", "")
+    if isinstance(secret_value, str):
+        secret_value = secret_value.strip()
+    
+    if auth_type == "api_key" and secret_value:
+        # Simplistic approach: if no custom header name is provided for api_key, we use 'x-api-key'
+        # Can be enhanced by storing both key_name and key_value in secret_value JSON
+        headers["x-api-key"] = secret_value
+    elif auth_type == "bearer_token" and secret_value:
+        headers["Authorization"] = f"Bearer {secret_value}"
+    
     if not url:
         raise ValueError("Missing 'url' in config parameters")
 

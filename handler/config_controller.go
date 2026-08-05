@@ -11,10 +11,12 @@ import (
 // ScrapingConfigController handles scraping configuration HTTP requests.
 type ScrapingConfigController struct {
 	service contract.ScrapingConfigService
+	jobSvc  contract.ScrapingJobService
 }
 
 func (ctrl *ScrapingConfigController) InitService(s *contract.Service) {
 	ctrl.service = s.ScrapingConfig
+	ctrl.jobSvc = s.ScrapingJob
 }
 
 // GetAll retrieves all scraping configs.
@@ -117,4 +119,30 @@ func (h *ScrapingConfigController) Delete(c *gin.Context) {
 	}
 
 	response.OK(c, "Config deleted successfully", nil)
+}
+
+// RunShortcut updates config parameters and immediately starts a scraping job.
+func (h *ScrapingConfigController) RunShortcut(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		response.BadRequest(c, "Config ID is required")
+		return
+	}
+
+	var req dto.RunConfigShortcutRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	userID, _ := c.Get("user_id")
+	userRole, _ := c.Get("user_role")
+
+	job, err := h.jobSvc.RunShortcut(id, req, userID.(string), userRole.(string))
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+
+	response.Created(c, "Config updated and job triggered successfully", job)
 }
