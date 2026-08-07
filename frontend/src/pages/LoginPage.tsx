@@ -31,11 +31,12 @@ export function LoginPage() {
         setIsRegister(false)
       } else {
         const res = await authApi.login({ email, password })
-        login(res.authorization.token, res.user)
-        toast.success(`Selamat datang kembali, ${res.user.name}!`)
+        login(res.data.authorization.token, res.data.user)
+        toast.success(`Selamat datang kembali, ${res.data.user.name}!`)
         navigate('/dashboard')
       }
     } catch (err: any) {
+      console.log(err)
       const msg = err.response?.data?.error || err.message || 'Terjadi kesalahan pada server'
       setError(msg)
       toast.error(msg)
