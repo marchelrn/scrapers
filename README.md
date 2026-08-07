@@ -1,39 +1,26 @@
-# Basic Go MVC Template
+# Sistem Manajemen Scrapers BPS
 
-Template MVC dasar untuk Go, tanpa isi project lama.
+Repositori ini terdiri dari 2 bagian utama:
 
-## Struktur
-
-- `handler/` HTTP handler (controller)
-- `service/` business logic
-- `repository/` data access
-- `routes/` route registration
-- `config/` app config
-- `internal/` bootstrap server/database
-- `contract/` interface between layer
-
-## Quick Start
-
-1. Rename module dan import path:
-
-```bash
-./init_template.sh github.com/username/nama-project
+```
+scrapers/
+├── backend/     # Aplikasi Go (Gin) API Server & Python Workers
+└── frontend/    # Aplikasi React 19 + Vite + Tailwind CSS Web Platform
 ```
 
-2. Siapkan environment:
+## 🚀 Cara Menjalankan
 
+### 1. Menjalankan Backend (Go Server)
 ```bash
-cp .env.example .env  
-```
-
-3. Jalankan aplikasi:
-
-```bash
+cd backend
 go run main.go
 ```
+* API Server akan berjalan di `http://localhost:8080`
 
-4. Test endpoint:
-
+### 2. Menjalankan Frontend (React Platform)
 ```bash
-curl http://localhost:8080/health
+cd frontend
+npm install
+npm run dev
 ```
+* Antarmuka Web akan berjalan di `http://localhost:5173`
