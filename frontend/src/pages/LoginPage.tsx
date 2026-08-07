@@ -36,7 +36,7 @@ export function LoginPage() {
         navigate('/dashboard')
       }
     } catch (err: any) {
-      const msg = err.response?.data?.error || 'Terjadi kesalahan pada server'
+      const msg = err.response?.data?.error || err.message || 'Terjadi kesalahan pada server'
       setError(msg)
       toast.error(msg)
     } finally {

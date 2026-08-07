@@ -18,13 +18,21 @@ apiClient.interceptors.request.use((config) => {
   return config
 })
 
-// On 401 → logout
+// On success: unwrap backend API envelope { success: true, data: ... }
+// On 401: logout and redirect to /login unless already on /login
 apiClient.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    if (res.data && typeof res.data === 'object' && 'success' in res.data && 'data' in res.data) {
+      res.data = res.data.data
+    }
+    return res
+  },
   (err) => {
     if (err.response?.status === 401) {
-      useAuthStore.getState().logout()
-      window.location.href = '/login'
+      if (window.location.pathname !== '/login') {
+        useAuthStore.getState().logout()
+        window.location.href = '/login'
+      }
     }
     return Promise.reject(err)
   },
