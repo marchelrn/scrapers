@@ -30,7 +30,12 @@ func CORSMiddleware(cfg *config.Config) gin.HandlerFunc {
 		corsConfig.AllowAllOrigins = true
 		corsConfig.AllowCredentials = false
 	} else {
-		corsConfig.AllowOrigins = []string{origin}
+		origins := []string{origin}
+		// In debug mode, also allow the Vite dev server origin
+		if cfg.GinMode == "debug" || cfg.DevMode == "true" {
+			origins = append(origins, "http://localhost:5173", "http://127.0.0.1:5173")
+		}
+		corsConfig.AllowOrigins = origins
 		corsConfig.AllowCredentials = true
 	}
 

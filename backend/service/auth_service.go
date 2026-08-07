@@ -35,10 +35,7 @@ func ImplAuthService(userRepo contract.UserRepository, cfg *config.Config) contr
 func (s *AuthService) Register(req dto.RegisterRequest) (*dto.UserResponse, error) {
 	// Check if email already exists
 	exists, err := s.UserRepo.GetByEmail(req.Email)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
-		}
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
 
@@ -66,7 +63,7 @@ func (s *AuthService) Register(req dto.RegisterRequest) (*dto.UserResponse, erro
 	}
 
 	if err := s.UserRepo.Create(user); err != nil {
-		return nil, errors.New("failed to create user")
+		return nil, errors.New("failed to create user: " + err.Error())
 	}
 
 	resp := dto.ToUserResponse(*user)
