@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { Header } from '../components/layout/Header'
 import { configsApi } from '../api/configs'
 import type { ScrapingConfig } from '../types'
-import { ArrowLeft, Play, Settings, Calendar, Clock, CheckCircle2, XCircle, Code2, Loader2 } from 'lucide-react'
+import { ArrowLeft, Play, CheckCircle2, XCircle, Code2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export function ConfigDetailPage() {

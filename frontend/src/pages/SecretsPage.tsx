@@ -3,7 +3,7 @@ import { Header } from '../components/layout/Header'
 import { secretsApi } from '../api/secrets'
 import type { Secret, SecretType } from '../types'
 import {
-  KeyRound, Plus, Trash2, Shield, Eye, EyeOff, Lock, Loader2
+  KeyRound, Plus, Trash2, Loader2
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 

@@ -1,5 +1,5 @@
 import { useAuthStore } from '../../store/authStore'
-import { Bell, Shield } from 'lucide-react'
+import { Shield } from 'lucide-react'
 
 interface HeaderProps {
   title: string

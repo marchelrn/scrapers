@@ -5,7 +5,7 @@ import { jobsApi } from '../api/jobs'
 import type { DashboardSummary, ScrapingJob } from '../types'
 import {
   Activity, PlayCircle, CheckCircle2, XCircle, Clock,
-  Cpu, Calendar, ArrowUpRight, RefreshCw, Loader2
+  Cpu, Calendar, ArrowUpRight, RefreshCw
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'

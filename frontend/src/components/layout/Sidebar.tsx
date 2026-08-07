@@ -4,7 +4,6 @@ import {
   KeyRound, Users, LogOut, ChevronRight, Activity, User,
 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
-import { authApi } from '../../api/auth'
 
 const navItems = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },

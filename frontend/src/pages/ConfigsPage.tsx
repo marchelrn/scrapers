@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Header } from '../components/layout/Header'
 import { configsApi } from '../api/configs'
-import { methodsApi } from '../api/methods'
-import type { ScrapingConfig, Method } from '../types'
+import type { ScrapingConfig } from '../types'
 import { VisualSelectorModal } from '../components/shared/VisualSelectorModal'
 import {
-  Plus, Settings, Play, Trash2, Edit2, CheckCircle, XCircle,
-  MousePointer, Search, Globe, Code, KeyRound, Loader2, ArrowRight
+  Plus, Play, Trash2, CheckCircle, XCircle,
+  MousePointer, Loader2
 } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
@@ -14,7 +13,6 @@ import toast from 'react-hot-toast'
 export function ConfigsPage() {
   const navigate = useNavigate()
   const [configs, setConfigs] = useState<ScrapingConfig[]>([])
-  const [methods, setMethods] = useState<Method[]>([])
   const [loading, setLoading] = useState(true)
 
   // Modal State
@@ -42,12 +40,8 @@ export function ConfigsPage() {
 
   const fetchInitial = async () => {
     try {
-      const [cfgs, mths] = await Promise.all([
-        configsApi.getAll(),
-        methodsApi.getAll().catch(() => []),
-      ])
+      const cfgs = await configsApi.getAll()
       setConfigs(cfgs || [])
-      setMethods(mths || [])
     } catch (err: any) {
       toast.error('Gagal memuat daftar konfigurasi')
     } finally {

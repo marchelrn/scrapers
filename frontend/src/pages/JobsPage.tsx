@@ -3,7 +3,7 @@ import { Header } from '../components/layout/Header'
 import { jobsApi } from '../api/jobs'
 import type { ScrapingJob } from '../types'
 import {
-  Briefcase, CheckCircle2, XCircle, PlayCircle, Clock,
+  CheckCircle2, XCircle, PlayCircle, Clock,
   ChevronLeft, ChevronRight, RefreshCw, Eye
 } from 'lucide-react'
 import { Link } from 'react-router-dom'

@@ -4,7 +4,7 @@ import { schedulesApi } from '../api/schedules'
 import { configsApi } from '../api/configs'
 import type { Schedule, ScrapingConfig } from '../types'
 import {
-  Calendar, Plus, Trash2, Clock, CheckCircle2, XCircle, Loader2
+  Plus, Trash2, CheckCircle2, XCircle, Loader2
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 

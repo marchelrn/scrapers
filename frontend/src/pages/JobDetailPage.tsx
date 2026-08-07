@@ -5,7 +5,7 @@ import { jobsApi } from '../api/jobs'
 import type { ScrapingJob } from '../types'
 import {
   ArrowLeft, CheckCircle2, XCircle, PlayCircle, Clock,
-  Terminal, FileText, Database, Copy, Check, RefreshCw
+  Terminal, Database, Copy, Check, RefreshCw
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 

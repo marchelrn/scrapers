@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Header } from '../components/layout/Header'
 import { usersApi } from '../api/users'
 import type { UserResponse } from '../types'
-import { Users, Shield, Trash2, Edit2, Loader2, CheckCircle2 } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export function UsersPage() {
