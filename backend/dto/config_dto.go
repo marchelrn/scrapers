@@ -33,7 +33,7 @@ type ConfigParameterRequest struct {
 
 // RunConfigShortcutRequest is used to update parameters and instantly trigger a job.
 type RunConfigShortcutRequest struct {
-	Parameters []ConfigParameterRequest `json:"parameters" binding:"required"`
+	Parameters []ConfigParameterRequest `json:"parameters" binding:"omitempty"`
 }
 
 // ConfigParameterResponse is the public representation of a configuration parameter.
