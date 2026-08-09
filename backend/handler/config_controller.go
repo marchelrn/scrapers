@@ -131,8 +131,11 @@ func (h *ScrapingConfigController) RunShortcut(c *gin.Context) {
 
 	var req dto.RunConfigShortcutRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "Invalid request: "+err.Error())
-		return
+		// If body is completely empty, it's fine, we just run the existing config
+		if err.Error() != "EOF" {
+			response.BadRequest(c, "Invalid request: "+err.Error())
+			return
+		}
 	}
 
 	userID, _ := c.Get("user_id")

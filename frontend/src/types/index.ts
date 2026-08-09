@@ -22,10 +22,10 @@ export interface UserResponse {
   updated_at: string
 }
 export interface LoginResponse {
-  data: {
-    authorization: Token
-    user: UserResponse
-  }
+
+  authorization: Token
+  user: UserResponse
+
 }
 
 // ─── Dashboard ───────────────────────────────────────────────────────────────

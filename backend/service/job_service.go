@@ -98,42 +98,45 @@ func (s *ScrapingJobService) RunShortcut(configID string, req dto.RunConfigShort
 		return nil, errors.New("scraping config not found or unauthorized")
 	}
 
-	// Validate new parameters against registry
-	method, err := registry.Get().GetMethod(config.MethodCode)
-	if err != nil {
-		return nil, errors.New("invalid method code on config")
-	}
-
-	paramMap := make(map[string]interface{})
-	for _, p := range req.Parameters {
-		var val interface{}
-		if err := json.Unmarshal(p.ParameterValue, &val); err != nil {
-			return nil, errors.New("invalid json in parameter " + p.ParameterName)
+	updatedConfig := config
+	if len(req.Parameters) > 0 {
+		// Validate new parameters against registry
+		method, err := registry.Get().GetMethod(config.MethodCode)
+		if err != nil {
+			return nil, errors.New("invalid method code on config")
 		}
-		paramMap[p.ParameterName] = val
-	}
 
-	if err := method.Validate(paramMap); err != nil {
-		return nil, errors.New("invalid parameters: " + err.Error())
-	}
-
-	// Replace parameters in DB
-	if err := s.configParamRepo.DeleteByConfigID(configID); err != nil {
-		return nil, errors.New("failed to clear old parameters")
-	}
-	for _, p := range req.Parameters {
-		param := &models.ConfigParameter{
-			ConfigID:       configID,
-			ParameterName:  p.ParameterName,
-			ParameterValue: p.ParameterValue,
+		paramMap := make(map[string]interface{})
+		for _, p := range req.Parameters {
+			var val interface{}
+			if err := json.Unmarshal(p.ParameterValue, &val); err != nil {
+				return nil, errors.New("invalid json in parameter " + p.ParameterName)
+			}
+			paramMap[p.ParameterName] = val
 		}
-		if err := s.configParamRepo.Create(param); err != nil {
-			return nil, errors.New("failed to update config parameters")
-		}
-	}
 
-	// Reload config to get the newly attached parameters for execution
-	updatedConfig, _ := s.configRepo.GetByID(configID, userID, userRole)
+		if err := method.Validate(paramMap); err != nil {
+			return nil, errors.New("invalid parameters: " + err.Error())
+		}
+
+		// Replace parameters in DB
+		if err := s.configParamRepo.DeleteByConfigID(configID); err != nil {
+			return nil, errors.New("failed to clear old parameters")
+		}
+		for _, p := range req.Parameters {
+			param := &models.ConfigParameter{
+				ConfigID:       configID,
+				ParameterName:  p.ParameterName,
+				ParameterValue: p.ParameterValue,
+			}
+			if err := s.configParamRepo.Create(param); err != nil {
+				return nil, errors.New("failed to update config parameters")
+			}
+		}
+
+		// Reload config to get the newly attached parameters for execution
+		updatedConfig, _ = s.configRepo.GetByID(configID, userID, userRole)
+	}
 
 	// Create and Run Job
 	job := &models.ScrapingJob{
