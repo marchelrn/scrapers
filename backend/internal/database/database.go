@@ -32,6 +32,14 @@ func ConnectDB(cfg *config.Config) (*gorm.DB, *sql.DB) {
 		})
 	log.Println("connecting to databases")
 
+	if cfg.GinMode == "test" || cfg.GinMode == "release" {
+		log.Println("using external database")
+	} else if cfg.DevMode == "true" {
+		log.Println("using supabase")
+	} else {
+		log.Println("using local database")
+	}
+
 	db, err := gorm.Open(postgres.New(postgres.Config{
 		DSN:                  cfg.DB.DBurl,
 		PreferSimpleProtocol: true, // PgBouncer / Connection Pooler for Supabase/Render
@@ -46,14 +54,6 @@ func ConnectDB(cfg *config.Config) (*gorm.DB, *sql.DB) {
 		log.Fatalf("error connect sql. error : %v", err)
 	}
 	log.Println("success connect database")
-
-	if cfg.GinMode == "test" || cfg.GinMode == "release" {
-		log.Println("using external database")
-	} else if cfg.DevMode == "true" {
-		log.Println("using supabase")
-	} else {
-		log.Println("using local database")
-	}
 
 	log.Println("set database connection configuration")
 	sqlDB, err := db.DB()

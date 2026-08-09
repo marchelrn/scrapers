@@ -27,41 +27,44 @@ type DBConfig struct {
 
 // GetDBUrl returns the connection string based on GinMode
 func GetDBUrl(ginMode string) string {
-	var dbURL string
+	devMode := getEnv("DEBUG_TESTING", "true")
 
-	if ginMode == "debug" && getEnv("DEBUG_TESTING", "") == "true" {
-		ginMode = "debug_testing"
+	if devMode == "true" || ginMode == "release" || ginMode == "test" {
+		dbUrl := getEnv("DB_URL", getEnv("DB_URL_PROD", ""))
+		if dbUrl == "" {
+			log.Fatal("FATAL: DB_URL or DB_URL_PROD variable is required for DB cloud services")
+		}
+		return dbUrl
 	}
 
-	switch ginMode {
-	case "release":
-		dbURL = getEnv("DB_URL_PROD", "")
-	case "test":
-		dbURL = getEnv("DB_URL", "")
-	case "debug_testing":
-		dbURL = getEnv("DB_URL", "")
-	default:
-		host := getEnv("DB_HOST", "localhost")
-		port := getEnv("DB_PORT", "5432")
-		user := getEnv("DB_USER", "postgres")
-		password := getEnv("DB_PASSWORD", "postgres")
-		dbname := getEnv("DB_NAME", "scrapers")
-		sslmode := getEnv("DB_SSLMODE", "disable")
-		return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
-			host, port, user, password, dbname, sslmode)
-	}
-	if dbURL == "" {
-		log.Fatal("FATAL: DB_URL environment variable is required in production mode!")
-	}
-	return dbURL
+	host := getEnv("DB_HOST", "localhost")
+	port := getEnv("DB_PORT", "5431")
+	user := getEnv("DB_USER", "postgres")
+	password := getEnv("DB_PASSWORD", "postgres")
+	dbName := getEnv("DB_NAME", "scrapers")
+	sslMode := getEnv("DB_SSL_MODE", "disable")
 
+	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s", host, port, user, password, dbName, sslMode)
 }
 
 // Load reads environment variables and returns a Config struct
 func Load() *Config {
-	// Load .env file if it exists (ignore error if missing)
-	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found, using system environment variables")
+	// Load .env file if it exists
+	envFiles := []string{".env", "../.env", "../../.env"}
+	loaded := false
+	for _, file := range envFiles {
+		if _, err := os.Stat(file); err == nil {
+			if loadErr := godotenv.Load(file); loadErr != nil {
+				log.Fatalf("FATAL: Found '%s' file but failed to parse it: %v", file, loadErr)
+			}
+			loaded = true
+			fmt.Printf("Loaded env file: %s\n", file)
+			break
+		}
+	}
+
+	if !loaded {
+		fmt.Println("INFO: No .env file found in searched paths (.env, ../.env, ../../.env). Falling back to system environment variables.")
 	}
 
 	expiry, err := time.ParseDuration(getEnv("JWT_EXPIRY", "24h"))

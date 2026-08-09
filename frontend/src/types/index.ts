@@ -22,10 +22,8 @@ export interface UserResponse {
   updated_at: string
 }
 export interface LoginResponse {
-
-  authorization: Token
-  user: UserResponse
-
+    authorization: Token
+    user: UserResponse
 }
 
 // ─── Dashboard ───────────────────────────────────────────────────────────────
