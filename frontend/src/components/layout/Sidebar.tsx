@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Settings, Briefcase, Calendar,
-  KeyRound, Users, LogOut, ChevronRight, Activity, User,
+  KeyRound, Users, LogOut, ChevronRight, Activity, User, AlertOctagon, Bell, Eye, Play,
 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 
@@ -9,6 +9,10 @@ const navItems = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/configs',   label: 'Konfigurasi', icon: Settings },
   { to: '/jobs',      label: 'Jobs',        icon: Briefcase },
+  { to: '/test-runner', label: 'Test Runner', icon: Play },
+  { to: '/preview',   label: 'Pratinjau Data', icon: Eye },
+  { to: '/errors',    label: 'Error Logs',   icon: AlertOctagon },
+  { to: '/alerts',    label: 'Alert Rules',  icon: Bell },
   { to: '/schedules', label: 'Jadwal',      icon: Calendar },
   { to: '/secrets',   label: 'Secrets',     icon: KeyRound },
 ]

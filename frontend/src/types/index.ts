@@ -167,3 +167,121 @@ export interface ApiMessage {
   message: string
   status: number
 }
+
+// ─── Error Logs ──────────────────────────────────────────────────────────────
+export type ErrorType = 'NETWORK' | 'PARSE' | 'TIMEOUT' | 'AUTH' | 'RATE_LIMIT' | 'VALIDATION'
+export type SeverityType = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
+
+export interface ErrorLog {
+  id: string
+  jobId: string
+  configId: string
+  configName?: string
+  errorType: ErrorType
+  severity: SeverityType
+  message: string
+  timestamp: string | Date
+  isResolved: boolean
+  stackTrace?: string
+  details?: Record<string, unknown>
+}
+
+export interface ErrorLogQueryParams {
+  limit?: number
+  offset?: number
+  errorType?: string
+  severity?: SeverityType[] | string
+  dateFrom?: string
+  dateTo?: string
+  isResolved?: boolean
+  search?: string
+}
+
+export interface PaginatedErrorLogs {
+  data: ErrorLog[]
+  total: number
+  limit: number
+  offset: number
+}
+
+// ─── Alert Rules ─────────────────────────────────────────────────────────────
+export type AlertTriggerType =
+  | 'JOB_FAILED'
+  | 'TIMEOUT'
+  | 'RATE_LIMITED'
+  | 'HIGH_ERROR_RATE'
+  | 'NO_DATA_EXTRACTED'
+
+export type AlertActionType = 'EMAIL' | 'SLACK' | 'WEBHOOK'
+
+export interface AlertAction {
+  type: AlertActionType
+  target: string
+}
+
+export interface AlertRule {
+  id: string
+  name: string
+  description?: string
+  trigger: AlertTriggerType
+  threshold?: number
+  actions: AlertAction[]
+  enabled: boolean
+  createdAt: string | Date
+  lastTriggeredAt?: string | Date
+}
+
+export interface CreateAlertRuleRequest {
+  name: string
+  description?: string
+  trigger: AlertTriggerType
+  threshold?: number
+  actions: AlertAction[]
+  enabled?: boolean
+}
+
+// ─── Data Preview & Validation ───────────────────────────────────────────────
+export interface ValidationErrorItem {
+  rowIndex: number
+  field: string
+  rule: string
+  error: string
+}
+
+export interface PreviewResult {
+  success: boolean
+  totalExtracted: number
+  validationPassed: number
+  validationFailed: number
+  data: Record<string, any>[]
+  transformedData?: Record<string, any>[]
+  rawHtml?: string
+  validationErrors: ValidationErrorItem[]
+  executionTimeMs: number
+}
+
+export type RuleType = 'REQUIRED' | 'TYPE' | 'PATTERN' | 'RANGE'
+
+export interface ValidationRule {
+  fieldName: string
+  ruleType: RuleType
+  value?: string | number
+  errorMessage: string
+}
+
+// ─── Test Runner ─────────────────────────────────────────────────────────────
+export type ParserMethodType = 'CSS Selector' | 'XPath' | 'Regex' | 'API'
+
+export interface TestRun {
+  id: string
+  configId?: string
+  testUrl: string
+  parserMethod: ParserMethodType
+  selectorString: string
+  results: Record<string, any>[]
+  executionTimeMs: number
+  status: 'SUCCESS' | 'FAILED'
+  errorMessage?: string
+  rawHtml?: string
+  createdAt: string | Date
+}
