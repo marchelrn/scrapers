@@ -37,3 +37,5 @@ go run main.go
 ```bash
 curl http://localhost:8080/health
 ```
+
+### Test from README.md
