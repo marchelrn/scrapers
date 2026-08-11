@@ -24,7 +24,7 @@ export function SecretsPage() {
     try {
       const res = await secretsApi.getAll()
       setSecrets(res || [])
-    } catch (err: any) {
+    } catch {
       toast.error('Gagal mengambil daftar secret')
     } finally {
       setLoading(false)
@@ -65,7 +65,7 @@ export function SecretsPage() {
       await secretsApi.delete(id)
       toast.success('Secret berhasil dihapus')
       setSecrets(secrets.filter((s) => s.id !== id))
-    } catch (err: any) {
+    } catch {
       toast.error('Gagal menghapus secret')
     }
   }

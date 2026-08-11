@@ -3,6 +3,7 @@ import { Header } from '../components/layout/Header'
 import { schedulesApi } from '../api/schedules'
 import { configsApi } from '../api/configs'
 import type { Schedule, ScrapingConfig } from '../types'
+import { LowCodeSchedulePicker, cronToIndonesian } from '../components/shared/LowCodeSchedulePicker'
 import {
   Plus, Trash2, CheckCircle2, XCircle, Loader2
 } from 'lucide-react'
@@ -18,7 +19,7 @@ export function SchedulesPage() {
 
   // Form State
   const [configId, setConfigId] = useState('')
-  const [cronExpression, setCronExpression] = useState('*/1 * * * *')
+  const [cronExpression, setCronExpression] = useState('0 0 * * *')
   const [timezone, setTimezone] = useState('Asia/Makassar')
   const [enabled, setEnabled] = useState(true)
 
@@ -33,7 +34,7 @@ export function SchedulesPage() {
       if (cfgRes && cfgRes.length > 0) {
         setConfigId(cfgRes[0].id)
       }
-    } catch (err: any) {
+    } catch {
       toast.error('Gagal mengambil data jadwal')
     } finally {
       setLoading(false)
@@ -74,7 +75,7 @@ export function SchedulesPage() {
       await schedulesApi.update(schedule.id, { enabled: !schedule.enabled })
       toast.success(`Jadwal #${schedule.id} ${!schedule.enabled ? 'diaktifkan' : 'dinonaktifkan'}`)
       fetchData()
-    } catch (err: any) {
+    } catch {
       toast.error('Gagal mengedit status jadwal')
     }
   }
@@ -85,7 +86,7 @@ export function SchedulesPage() {
       await schedulesApi.delete(id)
       toast.success('Jadwal berhasil dihapus')
       setSchedules(schedules.filter((s) => s.id !== id))
-    } catch (err: any) {
+    } catch {
       toast.error('Gagal menghapus jadwal')
     }
   }
@@ -94,13 +95,13 @@ export function SchedulesPage() {
     <div>
       <Header
         title="Jadwal Eksekusi Otomatis (Scheduler)"
-        subtitle="Atur waktu eksekusi berkala (CRON) untuk menjalankan scraping secara otomatis."
+        subtitle="Atur waktu eksekusi berkala untuk menjalankan scraping secara otomatis tanpa koding."
       />
 
       <div className="p-8 space-y-6 max-w-7xl mx-auto">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-white">Daftar Jadwal</h2>
+            <h2 className="text-lg font-semibold text-white">Daftar Jadwal Active</h2>
             <p className="text-xs text-gray-400">Total {schedules.length} jadwal terdaftar dalam sistem</p>
           </div>
           <button onClick={() => setShowModal(true)} className="btn-primary text-xs">
@@ -115,9 +116,9 @@ export function SchedulesPage() {
             <table className="table">
               <thead>
                 <tr>
-                  <th>ID</th>
-                  <th>Config ID</th>
-                  <th>CRON Expression</th>
+                  <th>Target Konfigurasi</th>
+                  <th>Deskripsi Jadwal</th>
+                  <th>CRON</th>
                   <th>Timezone</th>
                   <th>Status</th>
                   <th>Next Run</th>
@@ -138,43 +139,51 @@ export function SchedulesPage() {
                     </td>
                   </tr>
                 ) : (
-                  schedules.map((s) => (
-                    <tr key={s.id}>
-                      <td className="font-mono text-xs text-gray-400">#{s.id}</td>
-                      <td className="font-mono text-xs text-brand-300">
-                        {s.config_id.substring(0, 13)}...
-                      </td>
-                      <td>
-                        <span className="font-mono text-xs px-2.5 py-1 rounded-lg bg-surface-900 border border-surface-700 text-amber-300">
-                          {s.cron_expression}
-                        </span>
-                      </td>
-                      <td className="text-xs text-gray-300">{s.timezone || 'Asia/Makassar'}</td>
-                      <td>
-                        <button
-                          onClick={() => handleToggle(s)}
-                          className="cursor-pointer"
-                        >
-                          {s.enabled ? (
-                            <span className="badge-success"><CheckCircle2 className="w-3 h-3" /> Enabled</span>
-                          ) : (
-                            <span className="badge-neutral"><XCircle className="w-3 h-3" /> Disabled</span>
-                          )}
-                        </button>
-                      </td>
-                      <td className="text-xs text-gray-300">
-                        {s.next_run ? new Date(s.next_run).toLocaleString('id-ID') : '-'}
-                      </td>
-                      <td className="text-right">
-                        <button
-                          onClick={() => handleDelete(s.id)}
-                          className="btn-danger btn-sm"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
+                  schedules.map((s) => {
+                    const cfg = configs.find((c) => c.id === s.config_id)
+                    return (
+                      <tr key={s.id}>
+                        <td>
+                          <div>
+                            <p className="text-xs font-bold text-white">{cfg?.name || 'Config Tanpa Nama'}</p>
+                            <p className="font-mono text-[11px] text-gray-400">{s.config_id.substring(0, 13)}...</p>
+                          </div>
+                        </td>
+                        <td className="text-xs text-emerald-300 font-medium">
+                          {cronToIndonesian(s.cron_expression, s.timezone || 'Asia/Makassar')}
+                        </td>
+                        <td>
+                          <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-surface-900 border border-surface-700 text-amber-300">
+                            {s.cron_expression}
+                          </span>
+                        </td>
+                        <td className="text-xs text-gray-300 font-mono">{s.timezone || 'Asia/Makassar'}</td>
+                        <td>
+                          <button
+                            onClick={() => handleToggle(s)}
+                            className="cursor-pointer"
+                          >
+                            {s.enabled ? (
+                              <span className="badge-success"><CheckCircle2 className="w-3 h-3" /> Enabled</span>
+                            ) : (
+                              <span className="badge-neutral"><XCircle className="w-3 h-3" /> Disabled</span>
+                            )}
+                          </button>
+                        </td>
+                        <td className="text-xs text-gray-300">
+                          {s.next_run ? new Date(s.next_run).toLocaleString('id-ID') : '-'}
+                        </td>
+                        <td className="text-right">
+                          <button
+                            onClick={() => handleDelete(s.id)}
+                            className="btn-danger btn-sm"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })
                 )}
               </tbody>
             </table>
@@ -185,7 +194,7 @@ export function SchedulesPage() {
       {/* Modal Create Schedule */}
       {showModal && (
         <div className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="card w-full max-w-lg bg-surface-900 border-surface-600 shadow-2xl p-6 space-y-5">
+          <div className="card w-full max-w-lg bg-surface-900 border-surface-600 shadow-2xl p-6 space-y-5 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-surface-700 pb-3">
               <h3 className="text-sm font-bold text-white">Tambah Jadwal Scraping Otomatis</h3>
               <button onClick={() => setShowModal(false)} className="btn-ghost btn-sm text-gray-400">Batal</button>
@@ -197,7 +206,7 @@ export function SchedulesPage() {
                 <select
                   value={configId}
                   onChange={(e) => setConfigId(e.target.value)}
-                  className="input"
+                  className="input font-semibold text-brand-300"
                   required
                 >
                   {configs.map((c) => (
@@ -208,50 +217,14 @@ export function SchedulesPage() {
                 </select>
               </div>
 
-              <div className="form-group">
-                <label className="label">Ekspresi CRON</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="*/1 * * * *"
-                  value={cronExpression}
-                  onChange={(e) => setCronExpression(e.target.value)}
-                  className="input font-mono"
-                />
-                <div className="flex gap-2 mt-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setCronExpression('*/1 * * * *')}
-                    className="btn-ghost btn-sm text-[10px] text-brand-400"
-                  >
-                    Setiap Menit (*/1 * * * *)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCronExpression('0 * * * *')}
-                    className="btn-ghost btn-sm text-[10px] text-brand-400"
-                  >
-                    Setiap Jam (0 * * * *)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCronExpression('0 0 * * *')}
-                    className="btn-ghost btn-sm text-[10px] text-brand-400"
-                  >
-                    Setiap Hari (0 0 * * *)
-                  </button>
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label className="label">Zona Waktu (Timezone)</label>
-                <input
-                  type="text"
-                  value={timezone}
-                  onChange={(e) => setTimezone(e.target.value)}
-                  className="input"
-                />
-              </div>
+              <LowCodeSchedulePicker
+                initialCron={cronExpression}
+                initialTimezone={timezone}
+                onChange={(newCron, newTz) => {
+                  setCronExpression(newCron)
+                  setTimezone(newTz)
+                }}
+              />
 
               <div className="flex items-center gap-2 pt-2">
                 <input

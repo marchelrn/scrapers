@@ -24,7 +24,7 @@ export function JobDetailPage() {
     try {
       const res = await jobsApi.getById(id)
       setJob(res)
-    } catch (err: any) {
+    } catch {
       if (!silent) toast.error('Gagal mengambil detail job')
     } finally {
       if (!silent) setLoading(false)
@@ -99,7 +99,7 @@ export function JobDetailPage() {
       const fileName = `job_${id?.substring(0, 8)}_${new Date().toISOString().slice(0, 10)}.xlsx`
       XLSX.writeFile(workbook, fileName)
       toast.success(`Berhasil mengunduh ${fileName}`)
-    } catch (err: any) {
+    } catch {
       toast.error('Gagal mengekspor file Excel')
     }
   }
@@ -116,7 +116,7 @@ export function JobDetailPage() {
       const fileName = `job_${id?.substring(0, 8)}_${new Date().toISOString().slice(0, 10)}.csv`
       XLSX.writeFile(workbook, fileName, { bookType: 'csv' })
       toast.success(`Berhasil mengunduh ${fileName}`)
-    } catch (err: any) {
+    } catch {
       toast.error('Gagal mengekspor file CSV')
     }
   }

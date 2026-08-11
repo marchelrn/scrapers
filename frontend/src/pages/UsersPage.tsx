@@ -13,7 +13,7 @@ export function UsersPage() {
     try {
       const res = await usersApi.getAll()
       setUsers(res || [])
-    } catch (err: any) {
+    } catch {
       toast.error('Gagal mengambil daftar pengguna')
     } finally {
       setLoading(false)
@@ -29,7 +29,7 @@ export function UsersPage() {
       await usersApi.updateAsAdmin(user.id, { role: newRole })
       toast.success(`Role ${user.name} diubah menjadi ${newRole}`)
       fetchUsers()
-    } catch (err: any) {
+    } catch {
       toast.error('Gagal memperbarui role user')
     }
   }
@@ -40,7 +40,7 @@ export function UsersPage() {
       await usersApi.delete(id)
       toast.success('Pengguna berhasil dihapus')
       setUsers(users.filter((u) => u.id !== id))
-    } catch (err: any) {
+    } catch {
       toast.error('Gagal menghapus user')
     }
   }

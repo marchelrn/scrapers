@@ -27,7 +27,7 @@ export function ConfigDetailPage() {
       const job = await configsApi.run(id)
       toast.success('Job scraping telah diantrekan!')
       navigate(`/jobs/${job.id}`)
-    } catch (err: any) {
+    } catch {
       toast.error('Gagal menjalankan job')
     }
   }

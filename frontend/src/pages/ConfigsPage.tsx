@@ -6,9 +6,10 @@ import { secretsApi } from '../api/secrets'
 import { schedulesApi } from '../api/schedules'
 import type { ScrapingConfig, Method, Secret } from '../types'
 import { VisualSelectorModal } from '../components/shared/VisualSelectorModal'
+import { LowCodeSchedulePicker } from '../components/shared/LowCodeSchedulePicker'
 import {
   Plus, Play, Trash2, CheckCircle, XCircle,
-  MousePointer, Loader2, KeyRound, Calendar, Clock, Lock
+  MousePointer, Loader2, KeyRound, Calendar, Lock
 } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
@@ -53,7 +54,7 @@ export function ConfigsPage() {
 
   // Schedule Modal Form State
   const [cronExpression, setCronExpression] = useState('0 0 * * *')
-  const [cronPreset, setCronPreset] = useState('daily')
+  const [scheduleTimezone, setScheduleTimezone] = useState('Asia/Makassar')
 
   const fetchInitialData = async () => {
     try {
@@ -65,7 +66,7 @@ export function ConfigsPage() {
       setConfigs(cfgs || [])
       setMethods(meths || [])
       setSecrets(secs || [])
-    } catch (err: any) {
+    } catch {
       toast.error('Gagal memuat data awal konfigurasi')
     } finally {
       setLoading(false)
@@ -166,7 +167,7 @@ export function ConfigsPage() {
       const job = await configsApi.run(configId)
       toast.success('Job scraping berhasil dijalankan!')
       navigate(`/jobs/${job.id}`)
-    } catch (err: any) {
+    } catch {
       toast.error('Gagal memicu job scraping')
     }
   }
@@ -177,7 +178,7 @@ export function ConfigsPage() {
       await configsApi.delete(id)
       toast.success('Konfigurasi berhasil dihapus')
       setConfigs(configs.filter((c) => c.id !== id))
-    } catch (err: any) {
+    } catch {
       toast.error('Gagal menghapus konfigurasi')
     }
   }
@@ -195,24 +196,17 @@ export function ConfigsPage() {
       await schedulesApi.create({
         config_id: selectedConfigForSchedule.id,
         cron_expression: cronExpression,
+        timezone: scheduleTimezone,
         enabled: true,
       })
       toast.success('Jadwal scraping otomatis berhasil disimpan!')
       setShowScheduleModal(false)
       fetchInitialData()
-    } catch (err: any) {
+    } catch {
       toast.error('Gagal menyimpan jadwal')
     } finally {
       setSubmitting(false)
     }
-  }
-
-  const handlePresetChange = (preset: string) => {
-    setCronPreset(preset)
-    if (preset === 'hourly') setCronExpression('0 * * * *')
-    else if (preset === 'daily') setCronExpression('0 0 * * *')
-    else if (preset === 'weekly') setCronExpression('0 0 * * 0')
-    else if (preset === 'monthly') setCronExpression('0 0 1 * *')
   }
 
   const getMethodNameLabel = (code: string) => {
@@ -305,8 +299,7 @@ export function ConfigsPage() {
                                 : 'text-gray-400 border-surface-700 bg-surface-800 hover:text-gray-200'
                             }`}
                           >
-                            <Calendar className="w-3 h-3" />
-                            <span>{c.schedule_enabled ? 'Aktif' : '+ Jadwal'}</span>
+                            <span>{c.schedule_enabled ? 'Aktif' : <Calendar className="w-4 h-4" /> }</span>
                           </button>
                         </td>
                         <td className="text-xs text-gray-400">
@@ -658,11 +651,11 @@ export function ConfigsPage() {
       {/* Schedule Modal */}
       {showScheduleModal && selectedConfigForSchedule && (
         <div className="fixed inset-0 z-40 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="card w-full max-w-md bg-surface-900 border-surface-600 shadow-2xl p-6 space-y-5">
+          <div className="card w-full max-w-lg bg-surface-900 border-surface-600 shadow-2xl p-6 space-y-5 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-surface-700 pb-3">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-emerald-400" />
-                <span>Set Penjadwalan Scraping</span>
+                <span>Atur Jadwal Scraping Otomatis</span>
               </h3>
               <button onClick={() => setShowScheduleModal(false)} className="btn-ghost btn-sm text-gray-400">
                 Batal
@@ -674,42 +667,21 @@ export function ConfigsPage() {
             </p>
 
             <form onSubmit={handleCreateSchedule} className="space-y-4">
-              <div className="form-group">
-                <label className="label">Pilihan Preset Waktu</label>
-                <select
-                  value={cronPreset}
-                  onChange={(e) => handlePresetChange(e.target.value)}
-                  className="input"
-                >
-                  <option value="daily">Setiap Hari (0 0 * * *)</option>
-                  <option value="hourly">Setiap Jam (0 * * * *)</option>
-                  <option value="weekly">Setiap Minggu (0 0 * * 0)</option>
-                  <option value="monthly">Setiap Bulan (0 0 1 * *)</option>
-                  <option value="custom">Kustom Cron Expression</option>
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label className="label flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5 text-brand-400" />
-                  <span>Cron Expression</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={cronExpression}
-                  onChange={(e) => setCronExpression(e.target.value)}
-                  placeholder="0 0 * * *"
-                  className="input font-mono"
-                />
-              </div>
+              <LowCodeSchedulePicker
+                initialCron={cronExpression}
+                initialTimezone={scheduleTimezone}
+                onChange={(newCron, newTz) => {
+                  setCronExpression(newCron)
+                  setScheduleTimezone(newTz)
+                }}
+              />
 
               <button
                 type="submit"
                 disabled={submitting}
-                className="btn-primary w-full justify-center py-2 text-xs"
+                className="btn-primary w-full justify-center py-2.5 text-xs font-semibold"
               >
-                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Simpan Penjadwalan'}
+                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Simpan Jadwal Scraping'}
               </button>
             </form>
           </div>

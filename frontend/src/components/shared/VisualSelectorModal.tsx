@@ -32,7 +32,7 @@ export function VisualSelectorModal({ initialUrl, onSelectSelector, onClose }: V
           injectPickerScript(doc)
         }
       }
-    } catch (err: any) {
+    } catch {
       toast.error('Gagal mengambil HTML target via proxy')
     } finally {
       setLoading(false)

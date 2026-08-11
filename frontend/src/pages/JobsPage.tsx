@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Header } from '../components/layout/Header'
 import { jobsApi } from '../api/jobs'
-import type { ScrapingJob } from '../types'
+import { configsApi } from '../api/configs'
+import type { ScrapingJob, ScrapingConfig } from '../types'
 import {
   CheckCircle2, XCircle, PlayCircle, Clock,
   ChevronLeft, ChevronRight, RefreshCw, Eye
@@ -11,6 +12,7 @@ import toast from 'react-hot-toast'
 
 export function JobsPage() {
   const [jobs, setJobs] = useState<ScrapingJob[]>([])
+  const [configs, setConfigs] = useState<ScrapingConfig[]>([])
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
   const limit = 10
@@ -18,9 +20,13 @@ export function JobsPage() {
   const fetchJobs = async (currentPage: number) => {
     setLoading(true)
     try {
-      const res = await jobsApi.getAll({ page: currentPage, limit })
-      setJobs(res || [])
-    } catch (err: any) {
+      const [jobsRes, cfgsRes] = await Promise.all([
+        jobsApi.getAll({ page: currentPage, limit }),
+        configsApi.getAll().catch(() => []),
+      ])
+      setJobs(jobsRes || [])
+      setConfigs(cfgsRes || [])
+    } catch {
       toast.error('Gagal mengambil daftar pekerjaan (jobs)')
     } finally {
       setLoading(false)
@@ -73,6 +79,7 @@ export function JobsPage() {
             <table className="table">
               <thead>
                 <tr>
+                  <th>Nama Konfigurasi</th>
                   <th>Job ID</th>
                   <th>Config ID</th>
                   <th>Worker Name</th>
@@ -85,44 +92,50 @@ export function JobsPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="text-center py-8 text-gray-500 text-xs">
+                    <td colSpan={8} className="text-center py-8 text-gray-500 text-xs">
                       Memuat data jobs...
                     </td>
                   </tr>
                 ) : jobs.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center py-12 text-gray-500 text-xs">
+                    <td colSpan={8} className="text-center py-12 text-gray-500 text-xs">
                       Belum ada pekerjaan yang dijalankan.
                     </td>
                   </tr>
                 ) : (
-                  jobs.map((j) => (
-                    <tr key={j.id}>
-                      <td className="font-mono text-xs text-brand-300 font-medium">
-                        {j.id.substring(0, 13)}...
-                      </td>
-                      <td className="font-mono text-xs text-gray-400">
-                        {j.config_id.substring(0, 13)}...
-                      </td>
-                      <td className="text-xs text-gray-300">{j.worker_name || 'python_worker'}</td>
-                      <td>{getStatusBadge(j.status)}</td>
-                      <td className="text-xs text-gray-400">
-                        {j.started_at ? new Date(j.started_at).toLocaleString('id-ID') : '-'}
-                      </td>
-                      <td className="text-xs text-gray-400">
-                        {j.finished_at ? new Date(j.finished_at).toLocaleString('id-ID') : '-'}
-                      </td>
-                      <td className="text-right">
-                        <Link
-                          to={`/jobs/${j.id}`}
-                          className="btn-ghost btn-sm text-brand-400 hover:text-brand-300 inline-flex items-center gap-1"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>Hasil & Log</span>
-                        </Link>
-                      </td>
-                    </tr>
-                  ))
+                  jobs.map((j) => {
+                    const config = configs.find((c) => c.id === j.config_id)
+                    return (
+                      <tr key={j.id}>
+                        <td className="font-medium text-xs text-white">
+                          {config?.name || 'Config Tanpa Nama'}
+                        </td>
+                        <td className="font-mono text-xs text-brand-300 font-medium">
+                          {j.id.substring(0, 8)}...
+                        </td>
+                        <td className="font-mono text-xs text-gray-400">
+                          {j.config_id.substring(0, 8)}...
+                        </td>
+                        <td className="text-xs text-gray-300">{j.worker_name || 'python_worker'}</td>
+                        <td>{getStatusBadge(j.status)}</td>
+                        <td className="text-xs text-gray-400">
+                          {j.started_at ? new Date(j.started_at).toLocaleString('id-ID') : '-'}
+                        </td>
+                        <td className="text-xs text-gray-400">
+                          {j.finished_at ? new Date(j.finished_at).toLocaleString('id-ID') : '-'}
+                        </td>
+                        <td className="text-right">
+                          <Link
+                            to={`/jobs/${j.id}`}
+                            className="btn-ghost btn-sm text-brand-400 hover:text-brand-300 inline-flex items-center gap-1"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Hasil & Log</span>
+                          </Link>
+                        </td>
+                      </tr>
+                    )
+                  })
                 )}
               </tbody>
             </table>
@@ -155,3 +168,4 @@ export function JobsPage() {
     </div>
   )
 }
+
