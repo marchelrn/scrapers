@@ -30,8 +30,14 @@ func (c *ProxyController) GetHTML(ctx *gin.Context) {
 		return
 	}
 
+	// Set up transport with proxy support
+	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment, // Respect HTTP_PROXY, HTTPS_PROXY, NO_PROXY
+	}
+
 	client := &http.Client{
-		Timeout: 10 * time.Second,
+		Timeout:   10 * time.Second,
+		Transport: transport,
 	}
 
 	req, err := http.NewRequestWithContext(ctx.Request.Context(), "GET", targetURL, nil)

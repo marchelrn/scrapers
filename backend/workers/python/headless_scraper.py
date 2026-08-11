@@ -1,4 +1,5 @@
 from playwright.sync_api import sync_playwright
+import os
 
 def scrape(config_params):
     """
@@ -17,12 +18,26 @@ def scrape(config_params):
     
     if not url or not selector:
         raise ValueError("Missing 'url' or 'selector' in config parameters")
+        
+    # Build proxy dictionary from environment variables
+    # Playwright requires a single proxy URL
+    http_proxy = os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy")
+    https_proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
+    proxy_url = https_proxy or http_proxy
+    
+    proxy_config = None
+    if proxy_url:
+        proxy_config = {"server": proxy_url}
 
     results = []
     
     with sync_playwright() as p:
         # Launch headless browser
-        browser = p.chromium.launch(headless=True)
+        launch_kwargs = {"headless": True}
+        if proxy_config:
+            launch_kwargs["proxy"] = proxy_config
+            
+        browser = p.chromium.launch(**launch_kwargs)
         
         # Check if Auth Cookies are provided via secret
         context = browser.new_context()
