@@ -11,12 +11,7 @@ import { JobsPage } from './pages/JobsPage'
 import { JobDetailPage } from './pages/JobDetailPage'
 import { SchedulesPage } from './pages/SchedulesPage'
 import { SecretsPage } from './pages/SecretsPage'
-import { ErrorLogsPage } from './pages/ErrorLogsPage'
-import { AlertsPage } from './pages/AlertsPage'
-import { DataPreviewPage } from './pages/DataPreviewPage'
-import { TestRunnerPage } from './pages/TestRunnerPage'
 import { UsersPage } from './pages/UsersPage'
-import { ProfilePage } from './pages/ProfilePage'
 
 export default function App() {
   return (
@@ -44,13 +39,8 @@ export default function App() {
             <Route path="/configs/:id" element={<ConfigDetailPage />} />
             <Route path="/jobs" element={<JobsPage />} />
             <Route path="/jobs/:id" element={<JobDetailPage />} />
-            <Route path="/test-runner" element={<TestRunnerPage />} />
-            <Route path="/preview" element={<DataPreviewPage />} />
-            <Route path="/errors" element={<ErrorLogsPage />} />
-            <Route path="/alerts" element={<AlertsPage />} />
             <Route path="/schedules" element={<SchedulesPage />} />
             <Route path="/secrets" element={<SecretsPage />} />
-            <Route path="/profile" element={<ProfilePage />} />
 
             {/* Admin only route */}
             <Route element={<ProtectedRoute adminOnly />}>
