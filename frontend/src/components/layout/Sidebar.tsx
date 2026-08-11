@@ -1,24 +1,20 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Settings, Briefcase, Calendar,
-  KeyRound, Users, LogOut, ChevronRight, Activity, User, AlertOctagon, Bell, Eye, Play,
+  KeyRound, Users, LogOut, ChevronRight, Activity, UserCheck
 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 
 const navItems = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/configs',   label: 'Konfigurasi', icon: Settings },
-  { to: '/jobs',      label: 'Jobs',        icon: Briefcase },
-  { to: '/test-runner', label: 'Test Runner', icon: Play },
-  { to: '/preview',   label: 'Pratinjau Data', icon: Eye },
-  { to: '/errors',    label: 'Error Logs',   icon: AlertOctagon },
-  { to: '/alerts',    label: 'Alert Rules',  icon: Bell },
-  { to: '/schedules', label: 'Jadwal',      icon: Calendar },
-  { to: '/secrets',   label: 'Secrets',     icon: KeyRound },
+  { to: '/jobs',      label: 'Riwayat Jobs', icon: Briefcase },
+  { to: '/schedules', label: 'Penjadwalan', icon: Calendar },
+  { to: '/secrets',   label: 'Secret Vault', icon: KeyRound },
 ]
 
 const adminItems = [
-  { to: '/users', label: 'Users', icon: Users },
+  { to: '/users', label: 'Manajemen User', icon: Users },
 ]
 
 export function Sidebar() {
@@ -70,7 +66,7 @@ export function Sidebar() {
 
         {user?.role === 'admin' && (
           <>
-            <p className="px-3 mt-4 mb-2 text-[10px] font-semibold text-gray-500 uppercase tracking-widest">Admin</p>
+            <p className="px-3 mt-4 mb-2 text-[10px] font-semibold text-gray-500 uppercase tracking-widest">Administrator</p>
             {adminItems.map(({ to, label, icon: Icon }) => (
               <NavLink
                 key={to}
@@ -98,29 +94,22 @@ export function Sidebar() {
 
       {/* User footer */}
       <div className="px-3 py-4 border-t border-surface-700 space-y-1">
-        <NavLink
-          to="/profile"
-          className={({ isActive }) =>
-            `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors ${
-              isActive ? 'bg-surface-700 text-gray-200' : 'text-gray-400 hover:text-gray-200 hover:bg-surface-700/60'
-            }`
-          }
-        >
+        <div className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-gray-400 bg-surface-800/60">
           <div className="w-7 h-7 rounded-lg bg-brand-700/40 flex items-center justify-center">
-            <User className="w-3.5 h-3.5 text-brand-300" />
+            <UserCheck className="w-3.5 h-3.5 text-brand-300" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-gray-300 truncate">{user?.name ?? 'User'}</p>
-            <p className="text-[10px] text-gray-500 truncate">{user?.email}</p>
+            <p className="text-xs font-medium text-gray-300 truncate">{user?.name ?? 'Operator BPS'}</p>
+            <p className="text-[10px] text-brand-400 font-mono uppercase truncate">{user?.role ?? 'operator'}</p>
           </div>
-        </NavLink>
+        </div>
         <button
           onClick={handleLogout}
-          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm text-gray-500
+          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm text-gray-400
                      hover:text-red-400 hover:bg-red-900/20 transition-colors"
         >
           <LogOut className="w-4 h-4" />
-          <span>Logout</span>
+          <span>Keluar</span>
         </button>
       </div>
     </aside>
