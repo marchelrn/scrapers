@@ -1,11 +1,14 @@
 import warnings
 import logging
+import re
 import urllib.parse
 import concurrent.futures
 from itertools import islice
 
 # Matikan semua peringatan stdout agar tidak merusak format output JSON
 warnings.filterwarnings('ignore')
+warnings.filterwarnings("ignore", category=RuntimeWarning, module="ddgs")
+warnings.filterwarnings("ignore", message=".*has been renamed to `ddgs`.*")
 logging.getLogger().setLevel(logging.ERROR)
 
 import requests
@@ -14,7 +17,7 @@ from bs4 import BeautifulSoup
 # Try importing DDGS from duckduckgo_search or ddgs package if available
 DDGS = None
 try:
-    from duckduckgo_search import DDGS
+    from ddgs import DDGS
 except ImportError:
     try:
         from ddgs import DDGS
@@ -23,6 +26,13 @@ except ImportError:
 
 MAX_ARTICLE_TEXT_LENGTH = 15000  # Cap per article text (~15KB)
 MAX_SNIPPET_LENGTH = 1000        # Cap snippet length (~1KB)
+
+
+def _clean_text(text):
+    """Removes non-printable ASCII control characters from string to prevent JSON corruption."""
+    if not text:
+        return ""
+    return re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', text)
 
 
 def _search_ddg_fallback(query, max_results):
@@ -60,9 +70,9 @@ def _search_ddg_fallback(query, max_results):
                 snippet_text = snippet_text[:MAX_SNIPPET_LENGTH] + "..."
 
             results.append({
-                "title": a_title.get_text(strip=True),
+                "title": _clean_text(a_title.get_text(strip=True)),
                 "link": href,
-                "snippet": snippet_text,
+                "snippet": _clean_text(snippet_text),
                 "source": ""
             })
 
@@ -77,8 +87,8 @@ def _search_ddg_fallback(query, max_results):
 def _fetch_article_content(item):
     """Fetches and extracts text content from an article URL with strict stream timeout."""
     article_url = item.get("link")
-    article_title = item.get("title", "")
-    snippet = item.get("snippet", "")
+    article_title = _clean_text(item.get("title", ""))
+    snippet = _clean_text(item.get("snippet", ""))
 
     if len(snippet) > MAX_SNIPPET_LENGTH:
         snippet = snippet[:MAX_SNIPPET_LENGTH] + "..."
@@ -101,6 +111,17 @@ def _fetch_article_content(item):
         page_res = requests.get(article_url, headers=headers, timeout=(3.0, 5.0), stream=True)
 
         if page_res.status_code == 200:
+            content_type = page_res.headers.get("Content-Type", "").lower()
+            # Skip non-text files (PDFs, ZIPs, images, binary downloads)
+            if "text/html" not in content_type and "text/plain" not in content_type and "application/xhtml" not in content_type and "application/xml" not in content_type:
+                page_res.close()
+                return {
+                    "title": article_title,
+                    "url": article_url,
+                    "summary": snippet,
+                    "content": snippet
+                }
+
             # Read at most 200KB of response HTML to prevent hanging on huge downloads
             raw_bytes = page_res.raw.read(200000)
             page_res.close()
@@ -126,6 +147,8 @@ def _fetch_article_content(item):
             extracted_text = snippet
     except Exception:
         extracted_text = snippet
+
+    extracted_text = _clean_text(extracted_text)
 
     # Enforce maximum character limit per article to prevent stdout overflow (>5MB)
     if len(extracted_text) > MAX_ARTICLE_TEXT_LENGTH:
@@ -161,11 +184,16 @@ def scrape(config_params):
     if not query:
         raise ValueError("Missing 'query' parameter")
 
-    # If domain_filter is provided, append it to the query
+    # If domain_filter is provided, sanitize schemes (http://, https://) and path parts
     if domain_filter:
-        domains = [d.strip() for d in str(domain_filter).split(',') if d.strip()]
-        if domains:
-            site_query = " OR ".join([f"site:{d}" for d in domains])
+        raw_domains = [d.strip() for d in str(domain_filter).split(',') if d.strip()]
+        cleaned_domains = []
+        for d in raw_domains:
+            d_clean = re.sub(r'^https?://', '', d, flags=re.IGNORECASE).split('/')[0].strip()
+            if d_clean:
+                cleaned_domains.append(d_clean)
+        if cleaned_domains:
+            site_query = " OR ".join([f"site:{d}" for d in cleaned_domains])
             query = f"{query} {site_query}"
 
     # 1. DDG Search Request
@@ -175,11 +203,11 @@ def scrape(config_params):
             with DDGS() as ddgs:
                 results = list(islice(ddgs.text(query), max_results))
                 for r in results:
-                    snip = r.get("body", "")
+                    snip = _clean_text(r.get("body", ""))
                     if len(snip) > MAX_SNIPPET_LENGTH:
                         snip = snip[:MAX_SNIPPET_LENGTH] + "..."
                     items.append({
-                        "title": r.get("title", ""),
+                        "title": _clean_text(r.get("title", "")),
                         "link": r.get("href", ""),
                         "snippet": snip,
                         "source": ""

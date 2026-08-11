@@ -26,6 +26,9 @@ func GetPythonExecutable() string {
 		"../workers/python/venv/bin/python",
 		"../../workers/python/venv/bin/python",
 		"venv/bin/python",
+		"backend/workers/python/venv/bin/python",
+		"../backend/workers/python/venv/bin/python",
+		"/home/lerch/GolandProjects/scrapers/backend/workers/python/venv/bin/python",
 		".venv/bin/python",
 		"/tmp/opencode/scrapers-worker-venv/bin/python",
 	}

@@ -3,4 +3,4 @@ beautifulsoup4
 lxml
 selenium
 playwright
-duckduckgo-search
+ddgs
