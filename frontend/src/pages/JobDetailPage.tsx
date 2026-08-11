@@ -1,42 +1,82 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { Header } from '../components/layout/Header'
 import { jobsApi } from '../api/jobs'
 import type { ScrapingJob } from '../types'
 import {
   ArrowLeft, CheckCircle2, XCircle, PlayCircle, Clock,
-  Terminal, Database, Copy, Check, RefreshCw
+  Terminal, Database, Copy, Check, RefreshCw, FileSpreadsheet, Download, Table, Code2
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import * as XLSX from 'xlsx'
 
 export function JobDetailPage() {
   const { id } = useParams<{ id: string }>()
   const [job, setJob] = useState<ScrapingJob | null>(null)
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
+  const [activeTab, setActiveTab] = useState<'results' | 'logs'>('results')
+  const [viewMode, setViewMode] = useState<'table' | 'json'>('table')
 
-  const fetchJobDetail = async () => {
+  const fetchJobDetail = async (silent = false) => {
     if (!id) return
+    if (!silent) setLoading(true)
     try {
       const res = await jobsApi.getById(id)
       setJob(res)
     } catch (err: any) {
-      toast.error('Gagal mengambil detail job')
+      if (!silent) toast.error('Gagal mengambil detail job')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
   useEffect(() => {
-    fetchJobDetail()
-    // Auto-poll if job is pending or running
+    fetchJobDetail(false)
+  }, [id])
+
+  useEffect(() => {
+    if (!job || job.status === 'success' || job.status === 'failed') return
+
     const interval = setInterval(() => {
-      if (job?.status === 'pending' || job?.status === 'running') {
-        fetchJobDetail()
-      }
-    }, 5000)
+      fetchJobDetail(true)
+    }, 3000)
+
     return () => clearInterval(interval)
   }, [id, job?.status])
+
+  // Process results into flat rows for table display and Excel export
+  const flattenedRows = useMemo(() => {
+    if (!job?.results || job.results.length === 0) return []
+    const rows: Record<string, any>[] = []
+    job.results.forEach((item) => {
+      const json = item.result_json
+      if (Array.isArray(json)) {
+        json.forEach((sub) => {
+          if (typeof sub === 'object' && sub !== null) {
+            rows.push(sub)
+          } else {
+            rows.push({ result: sub })
+          }
+        })
+      } else if (typeof json === 'object' && json !== null) {
+        rows.push(json as Record<string, any>)
+      } else if (json !== undefined && json !== null) {
+        rows.push({ result: json })
+      }
+    })
+    return rows
+  }, [job?.results])
+
+  // Extract unique keys for table header
+  const tableColumns = useMemo(() => {
+    if (flattenedRows.length === 0) return []
+    const keysSet = new Set<string>()
+    flattenedRows.forEach((row) => {
+      Object.keys(row).forEach((k) => keysSet.add(k))
+    })
+    return Array.from(keysSet)
+  }, [flattenedRows])
 
   const copyResults = () => {
     if (!job?.results) return
@@ -45,6 +85,40 @@ export function JobDetailPage() {
     setCopied(true)
     toast.success('Hasil JSON berhasil disalin!')
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  const exportExcel = () => {
+    if (flattenedRows.length === 0) {
+      toast.error('Tidak ada data untuk diekspor')
+      return
+    }
+    try {
+      const worksheet = XLSX.utils.json_to_sheet(flattenedRows)
+      const workbook = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Results')
+      const fileName = `job_${id?.substring(0, 8)}_${new Date().toISOString().slice(0, 10)}.xlsx`
+      XLSX.writeFile(workbook, fileName)
+      toast.success(`Berhasil mengunduh ${fileName}`)
+    } catch (err: any) {
+      toast.error('Gagal mengekspor file Excel')
+    }
+  }
+
+  const exportCSV = () => {
+    if (flattenedRows.length === 0) {
+      toast.error('Tidak ada data untuk diekspor')
+      return
+    }
+    try {
+      const worksheet = XLSX.utils.json_to_sheet(flattenedRows)
+      const workbook = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Results')
+      const fileName = `job_${id?.substring(0, 8)}_${new Date().toISOString().slice(0, 10)}.csv`
+      XLSX.writeFile(workbook, fileName, { bookType: 'csv' })
+      toast.success(`Berhasil mengunduh ${fileName}`)
+    } catch (err: any) {
+      toast.error('Gagal mengekspor file CSV')
+    }
   }
 
   const getStatusBadge = (status?: string) => {
@@ -64,7 +138,7 @@ export function JobDetailPage() {
     return (
       <div>
         <Header title="Detail Execution Job" />
-        <div className="p-8 max-w-5xl mx-auto space-y-4">
+        <div className="p-8 max-w-6xl mx-auto space-y-4">
           <div className="h-48 skeleton" />
         </div>
       </div>
@@ -91,7 +165,7 @@ export function JobDetailPage() {
         </Link>
 
         {/* Header Card */}
-        <div className="card p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface-850">
+        <div className="card p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface-850 border-surface-700">
           <div className="space-y-1">
             <div className="flex items-center gap-3">
               <span className="font-mono text-base font-bold text-white">Job {job.id.substring(0, 13)}...</span>
@@ -100,93 +174,233 @@ export function JobDetailPage() {
             <p className="text-xs text-gray-400">Config ID: <span className="font-mono text-brand-300">{job.config_id}</span></p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <button onClick={fetchJobDetail} className="btn-secondary text-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={() => fetchJobDetail(false)} className="btn-secondary text-xs">
               <RefreshCw className="w-3.5 h-3.5" />
               <span>Refresh</span>
             </button>
-            {job.results && job.results.length > 0 && (
-              <button onClick={copyResults} className="btn-primary text-xs">
-                {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>Salin JSON Output</span>
-              </button>
+            {flattenedRows.length > 0 && (
+              <>
+                <button onClick={exportExcel} className="btn-primary bg-emerald-600 hover:bg-emerald-500 text-xs">
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  <span>Download Excel (.xlsx)</span>
+                </button>
+                <button onClick={exportCSV} className="btn-secondary text-xs">
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download CSV</span>
+                </button>
+                <button onClick={copyResults} className="btn-secondary text-xs">
+                  {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>JSON</span>
+                </button>
+              </>
             )}
           </div>
         </div>
 
-        {/* Timestamps */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="card p-4 text-xs space-y-1">
+        {/* Timestamps & Info Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="card p-4 text-xs space-y-1 bg-surface-800/80">
             <span className="text-gray-500">Worker Executed</span>
             <p className="font-mono text-gray-200 font-semibold">{job.worker_name || 'python_worker'}</p>
           </div>
-          <div className="card p-4 text-xs space-y-1">
+          <div className="card p-4 text-xs space-y-1 bg-surface-800/80">
+            <span className="text-gray-500">Total Baris Hasil</span>
+            <p className="font-mono text-teal-300 font-bold text-sm">{flattenedRows.length} Data Extracted</p>
+          </div>
+          <div className="card p-4 text-xs space-y-1 bg-surface-800/80">
             <span className="text-gray-500">Waktu Mulai</span>
             <p className="text-gray-200 font-semibold">{job.started_at ? new Date(job.started_at).toLocaleString('id-ID') : '-'}</p>
           </div>
-          <div className="card p-4 text-xs space-y-1">
+          <div className="card p-4 text-xs space-y-1 bg-surface-800/80">
             <span className="text-gray-500">Waktu Selesai</span>
             <p className="text-gray-200 font-semibold">{job.finished_at ? new Date(job.finished_at).toLocaleString('id-ID') : '-'}</p>
           </div>
         </div>
 
-        {/* Results JSON Box */}
-        <div className="card p-5 space-y-3 border-surface-700">
-          <h3 className="text-xs font-bold text-teal-300 uppercase tracking-wider flex items-center gap-2">
+        {/* Navigation Tabs */}
+        <div className="flex border-b border-surface-700 space-x-6">
+          <button
+            onClick={() => setActiveTab('results')}
+            className={`pb-3 text-sm font-semibold flex items-center gap-2 border-b-2 transition-colors ${
+              activeTab === 'results'
+                ? 'border-brand-500 text-brand-300'
+                : 'border-transparent text-gray-400 hover:text-gray-200'
+            }`}
+          >
             <Database className="w-4 h-4" />
-            <span>Hasil Scraping (JSON Result)</span>
-          </h3>
+            <span>Tab Results (Hasil Scraping)</span>
+            {flattenedRows.length > 0 && (
+              <span className="bg-brand-500/20 text-brand-300 text-[11px] px-2 py-0.5 rounded-full font-mono">
+                {flattenedRows.length}
+              </span>
+            )}
+          </button>
 
-          {!job.results || job.results.length === 0 ? (
-            <div className="p-8 text-center text-xs text-gray-500 bg-surface-900 rounded-xl border border-surface-800">
-              Belum ada hasil scraping yang tersimpan untuk job ini.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {job.results.map((res) => (
-                <pre
-                  key={res.id}
-                  className="bg-surface-950 p-4 rounded-xl text-xs font-mono text-emerald-300 border border-surface-800 overflow-x-auto max-h-96"
-                >
-                  {JSON.stringify(res.result_json, null, 2)}
-                </pre>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Execution Logs Terminal */}
-        <div className="card p-5 space-y-3 border-surface-700">
-          <h3 className="text-xs font-bold text-brand-300 uppercase tracking-wider flex items-center gap-2">
+          <button
+            onClick={() => setActiveTab('logs')}
+            className={`pb-3 text-sm font-semibold flex items-center gap-2 border-b-2 transition-colors ${
+              activeTab === 'logs'
+                ? 'border-brand-500 text-brand-300'
+                : 'border-transparent text-gray-400 hover:text-gray-200'
+            }`}
+          >
             <Terminal className="w-4 h-4" />
-            <span>Log Eksekusi Subprocess</span>
-          </h3>
-
-          {!job.logs || job.logs.length === 0 ? (
-            <div className="p-6 text-center text-xs text-gray-500 bg-surface-900 rounded-xl border border-surface-800">
-              Tidak ada catat log eksekusi.
-            </div>
-          ) : (
-            <div className="bg-surface-950 p-4 rounded-xl border border-surface-800 font-mono text-xs space-y-1.5 max-h-60 overflow-y-auto">
-              {job.logs.map((log) => (
-                <div key={log.id} className="flex gap-3">
-                  <span className="text-gray-500 shrink-0">[{new Date(log.created_at).toLocaleTimeString()}]</span>
-                  <span
-                    className={
-                      log.level === 'ERROR'
-                        ? 'text-red-400 font-semibold'
-                        : log.level === 'WARN'
-                        ? 'text-amber-400'
-                        : 'text-gray-300'
-                    }
-                  >
-                    [{log.level}] {log.message}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+            <span>Tab Logs (Terminal Process)</span>
+            {job.logs && job.logs.length > 0 && (
+              <span className="bg-surface-700 text-gray-300 text-[11px] px-2 py-0.5 rounded-full font-mono">
+                {job.logs.length}
+              </span>
+            )}
+          </button>
         </div>
+
+        {/* Tab Content: Results */}
+        {activeTab === 'results' && (
+          <div className="card p-5 space-y-4 border-surface-700">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xs font-bold text-teal-300 uppercase tracking-wider flex items-center gap-2">
+                  <Database className="w-4 h-4" />
+                  <span>Data Ekstraksi Artikel / Teks Target</span>
+                </h3>
+                <p className="text-xs text-gray-400 mt-0.5">Tampilan tabel data interaktif dengan opsi unduh Excel/CSV</p>
+              </div>
+
+              {flattenedRows.length > 0 && (
+                <div className="flex items-center gap-1 bg-surface-900 p-1 rounded-xl border border-surface-700 text-xs">
+                  <button
+                    onClick={() => setViewMode('table')}
+                    className={`px-3 py-1 rounded-lg flex items-center gap-1.5 transition-colors ${
+                      viewMode === 'table' ? 'bg-brand-600 text-white font-medium' : 'text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    <Table className="w-3.5 h-3.5" />
+                    <span>Tabel HTML</span>
+                  </button>
+                  <button
+                    onClick={() => setViewMode('json')}
+                    className={`px-3 py-1 rounded-lg flex items-center gap-1.5 transition-colors ${
+                      viewMode === 'json' ? 'bg-brand-600 text-white font-medium' : 'text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    <Code2 className="w-3.5 h-3.5" />
+                    <span>Raw JSON</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {flattenedRows.length === 0 ? (
+              <div className="p-12 text-center text-xs text-gray-500 bg-surface-900 rounded-xl border border-surface-800 space-y-2">
+                <Database className="w-8 h-8 mx-auto text-gray-600" />
+                <p className="font-semibold text-gray-400">Belum ada data hasil scraping</p>
+                <p>Jika job masih dalam status <span className="text-amber-400 font-mono">running</span>, halaman ini akan otomatis diperbarui.</p>
+              </div>
+            ) : viewMode === 'table' ? (
+              <div className="card overflow-hidden border-surface-800">
+                <div className="table-wrap max-h-[500px]">
+                  <table className="table">
+                    <thead className="sticky top-0 bg-surface-850 z-10">
+                      <tr>
+                        <th className="w-12 text-center">#</th>
+                        {tableColumns.map((col) => (
+                          <th key={col} className="capitalize text-brand-300">{col.replace(/_/g, ' ')}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {flattenedRows.map((row, idx) => (
+                        <tr key={idx} className="hover:bg-surface-800/50">
+                          <td className="text-center font-mono text-xs text-gray-500">{idx + 1}</td>
+                          {tableColumns.map((col) => {
+                            const val = row[col]
+                            const cellStr = typeof val === 'object' ? JSON.stringify(val) : String(val ?? '')
+                            const isUrl = cellStr.startsWith('http://') || cellStr.startsWith('https://')
+
+                            return (
+                              <td key={col} className="text-xs text-gray-200 max-w-xs truncate">
+                                {isUrl ? (
+                                  <a href={cellStr} target="_blank" rel="noreferrer" className="text-teal-400 underline hover:text-teal-300 truncate block">
+                                    {cellStr}
+                                  </a>
+                                ) : (
+                                  <span title={cellStr}>{cellStr}</span>
+                                )}
+                              </td>
+                            )
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {job.results?.map((res) => (
+                  <pre
+                    key={res.id}
+                    className="bg-surface-950 p-4 rounded-xl text-xs font-mono text-emerald-300 border border-surface-800 overflow-x-auto max-h-96"
+                  >
+                    {JSON.stringify(res.result_json, null, 2)}
+                  </pre>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab Content: Logs */}
+        {activeTab === 'logs' && (
+          <div className="card p-5 space-y-3 border-surface-700">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold text-brand-300 uppercase tracking-wider flex items-center gap-2">
+                <Terminal className="w-4 h-4" />
+                <span>Log Eksekusi Subprocess Python (Debugging & Audit)</span>
+              </h3>
+              <span className="text-xs text-gray-400">Diperlukan untuk analisa pesan kesalahan saat job failed</span>
+            </div>
+
+            {!job.logs || job.logs.length === 0 ? (
+              <div className="p-8 text-center text-xs text-gray-500 bg-surface-900 rounded-xl border border-surface-800">
+                Tidak ada catatan log eksekusi untuk job ini.
+              </div>
+            ) : (
+              <div className="bg-surface-950 p-4 rounded-xl border border-surface-800 font-mono text-xs space-y-2 max-h-96 overflow-y-auto">
+                {job.logs.map((log) => (
+                  <div key={log.id} className="flex items-start gap-3 border-b border-surface-900/60 pb-1.5">
+                    <span className="text-gray-500 shrink-0 text-[11px]">
+                      [{new Date(log.created_at).toLocaleTimeString()}]
+                    </span>
+                    <span
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0 ${
+                        log.level === 'ERROR'
+                          ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                          : log.level === 'WARN'
+                          ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                          : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                      }`}
+                    >
+                      {log.level}
+                    </span>
+                    <span
+                      className={`break-all ${
+                        log.level === 'ERROR'
+                          ? 'text-red-300 font-semibold'
+                          : log.level === 'WARN'
+                          ? 'text-amber-300'
+                          : 'text-gray-300'
+                      }`}
+                    >
+                      {log.message}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
