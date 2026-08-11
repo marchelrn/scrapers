@@ -36,13 +36,15 @@ def execute_job(python_file, config_params):
         # Call the scrape function
         results = scraper_module.scrape(config_params)
         
+        method_code = "google_search" if python_file == "google_search_scraper.py" else "target_url"
+        
         # Output results as JSON matching the contract
         print(json.dumps({
             "status": "success",
-            "method": "target_url",
+            "method": method_code,
             "results": results,
             "metadata": {
-                "source": target_url,
+                "source": target_url if target_url else "google_search",
                 "fetched_at": now_iso,
                 "item_count": len(results) if isinstance(results, list) else 1
             },
@@ -54,12 +56,13 @@ def execute_job(python_file, config_params):
         if "_resolved_secret_value" in config_params and config_params["_resolved_secret_value"]:
             error_msg = error_msg.replace(config_params["_resolved_secret_value"], "***REDACTED***")
             
+        method_code = "google_search" if python_file == "google_search_scraper.py" else "target_url"
         print(json.dumps({
             "status": "failed",
-            "method": "target_url",
+            "method": method_code,
             "results": [],
             "metadata": {
-                "source": target_url,
+                "source": target_url if target_url else "google_search",
                 "fetched_at": now_iso,
                 "item_count": 0
             },

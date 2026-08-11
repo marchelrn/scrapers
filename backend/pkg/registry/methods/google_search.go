@@ -99,8 +99,26 @@ func (m *GoogleSearchMethod) Execute(ctx context.Context, params map[string]inte
 	// We don't implement retry on the overall Python process for Google Search,
 	// because the Python script itself will handle API retries,
 	// and we want to avoid double-burning Google Search API quota.
-	cmd := exec.CommandContext(ctx, "workers/python/venv/bin/python", "workers/python/worker.py", pythonFile, paramsJSON)
+	cmd := exec.CommandContext(ctx, GetPythonExecutable(), GetWorkerScriptPath(), pythonFile, paramsJSON)
 	output, lastErr = cmd.CombinedOutput()
+
+	if ctx.Err() != nil {
+		nowISO := time.Now().UTC().Format(time.RFC3339)
+		return &dto.WorkerResult{
+			Status:  "failed",
+			Method:  m.Code(),
+			Results: []interface{}{},
+			Metadata: dto.WorkerMetadata{
+				Source:    "google_search",
+				FetchedAt: nowISO,
+				ItemCount: 0,
+			},
+			Error: &dto.WorkerError{
+				Code:    "TIMEOUT",
+				Message: "Worker process execution timed out or was terminated: " + ctx.Err().Error(),
+			},
+		}, nil
+	}
 
 	// 5MB Max Output limit
 	if len(output) > 5*1024*1024 {

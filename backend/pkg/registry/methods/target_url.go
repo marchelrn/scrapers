@@ -206,7 +206,7 @@ func (m *TargetURLMethod) Execute(ctx context.Context, params map[string]interfa
 	var lastErr error
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
-		cmd := exec.CommandContext(ctx, "workers/python/venv/bin/python", "workers/python/worker.py", pythonFile, paramsJSON)
+		cmd := exec.CommandContext(ctx, GetPythonExecutable(), GetWorkerScriptPath(), pythonFile, paramsJSON)
 		output, lastErr = cmd.CombinedOutput()
 
 		if ctx.Err() != nil {
@@ -220,6 +220,28 @@ func (m *TargetURLMethod) Execute(ctx context.Context, params map[string]interfa
 		if attempt < maxRetries {
 			time.Sleep(time.Duration(attempt+1) * time.Second)
 		}
+	}
+
+	if ctx.Err() != nil {
+		nowISO := time.Now().UTC().Format(time.RFC3339)
+		sourceStr := ""
+		if urlVal, ok := params["url"].(string); ok {
+			sourceStr = urlVal
+		}
+		return &dto.WorkerResult{
+			Status:  "failed",
+			Method:  m.Code(),
+			Results: []interface{}{},
+			Metadata: dto.WorkerMetadata{
+				Source:    sourceStr,
+				FetchedAt: nowISO,
+				ItemCount: 0,
+			},
+			Error: &dto.WorkerError{
+				Code:    "TIMEOUT",
+				Message: "Worker process execution timed out or was terminated: " + ctx.Err().Error(),
+			},
+		}, nil
 	}
 
 	if len(output) > maxOutputBytes {
