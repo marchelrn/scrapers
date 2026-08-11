@@ -21,7 +21,6 @@ import {
   ChevronRight,
   ChevronLeft,
   RefreshCw,
-  Info,
   Check,
   ShieldAlert,
 } from 'lucide-react'

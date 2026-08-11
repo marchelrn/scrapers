@@ -145,16 +145,28 @@ export interface CreateSecretRequest {
 
 // ─── Methods (Registry) ───────────────────────────────────────────────────────
 export interface MethodParam {
-  name: string
-  type: string
-  required: boolean
+  Name?: string
+  name?: string
+  Label?: string
+  label?: string
+  Type?: string
+  type?: string
+  Required?: boolean
+  required?: boolean
+  Default?: unknown
+  default?: unknown
+  Placeholder?: string
+  placeholder?: string
+  Description?: string
   description?: string
 }
 export interface Method {
   code: string
   name: string
   description?: string
-  parameters: MethodParam[]
+  version?: string
+  parameters?: MethodParam[]
+  auth_capabilities?: string[]
 }
 
 // ─── Generic API response ────────────────────────────────────────────────────
