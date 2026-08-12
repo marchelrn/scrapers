@@ -5,7 +5,7 @@ import { useAuthStore } from '../store/authStore'
 import { Activity, Lock, Mail, User, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-export function LoginPage() {
+export function JobHistory() {
   const navigate = useNavigate()
   const login = useAuthStore((s) => s.login)
 

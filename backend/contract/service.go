@@ -35,7 +35,7 @@ type AuthService interface {
 // ── Users ────────────────────────────────────────────────────────────────────
 
 type UserService interface {
-	GetAll() ([]dto.UserResponse, error)
+	GetAll(userID string) ([]dto.UserResponse, error)
 	GetUserByID(id string) (*dto.UserResponse, error)
 	UpdateProfile(id string, req dto.UpdateProfileRequest) (*dto.UserResponse, error)
 	UpdateAsAdmin(id string, req dto.UpdateRequest) (*dto.UserResponse, error)

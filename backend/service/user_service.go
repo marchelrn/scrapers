@@ -17,8 +17,8 @@ func ImplUserService(userRepo contract.UserRepository) contract.UserService {
 	}
 }
 
-func (s *UserService) GetAll() ([]dto.UserResponse, error) {
-	users, err := s.UserRepo.GetAll()
+func (s *UserService) GetAll(userID string) ([]dto.UserResponse, error) {
+	users, err := s.UserRepo.GetAll(userID)
 	if err != nil {
 		return nil, err
 	}

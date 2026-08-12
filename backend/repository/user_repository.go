@@ -43,9 +43,13 @@ func (r *UserRepository) GetByID(id string) (*models.User, error) {
 	return &m, nil
 }
 
-func (r *UserRepository) GetAll() ([]models.User, error) {
+func (r *UserRepository) GetAll(userID string) ([]models.User, error) {
 	var ms []models.User
-	err := r.db.Find(&ms).Error
+	query := r.db
+	if userID != "" {
+		query = query.Where("id != ?", userID)
+	}
+	err := query.Find(&ms).Error
 	return ms, err
 }
 

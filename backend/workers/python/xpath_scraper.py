@@ -25,8 +25,18 @@ def scrape(config_params):
     if https_proxy:
         proxies["https"] = https_proxy
 
+    # Add standard User-Agent header to avoid basic 403 Forbidden responses
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Sec-Ch-Ua": "\"Not_A Brand\";v=\"8\", \"Chromium\";v=\"120\", \"Google Chrome\";v=\"120\"",
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": "\"Windows\""
+    }
+
     # Only pass proxies arg if we have proxies configured
-    req_kwargs = {"timeout": 10}
+    req_kwargs = {"timeout": 15, "headers": headers}
     if proxies:
         req_kwargs["proxies"] = proxies
 

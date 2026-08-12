@@ -32,7 +32,7 @@ type UserRepository interface {
 	Create(user *models.User) error
 	GetByEmail(email string) (*models.User, error)
 	GetByID(id string) (*models.User, error)
-	GetAll() ([]models.User, error)
+	GetAll(userID string) ([]models.User, error)
 	Update(id string, model *models.User) (*models.User, error)
 	Delete(id string) error
 }

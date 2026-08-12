@@ -40,6 +40,12 @@ def scrape(config_params):
     if https_proxy:
         proxies["https"] = https_proxy
 
+    # Merge standard User-Agent header to avoid basic 403 Forbidden responses
+    if "User-Agent" not in headers and "user-agent" not in headers:
+        headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    if "Accept" not in headers and "accept" not in headers:
+        headers["Accept"] = "application/json, text/plain, */*"
+
     # Only pass proxies arg if we have proxies configured
     req_kwargs = {"headers": headers, "timeout": 10}
     if proxies:

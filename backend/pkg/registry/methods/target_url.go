@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"os/exec"
 	"time"
 
@@ -207,6 +208,24 @@ func (m *TargetURLMethod) Execute(ctx context.Context, params map[string]interfa
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		cmd := exec.CommandContext(ctx, GetPythonExecutable(), GetWorkerScriptPath(), pythonFile, paramsJSON)
+		
+		// Ensure environment variables specifically HTTP_PROXY and HTTPS_PROXY are passed
+		envVars := os.Environ()
+		hasHttp := false
+		hasHttps := false
+		for _, e := range envVars {
+			if len(e) >= 10 && e[:10] == "HTTP_PROXY" { hasHttp = true }
+			if len(e) >= 11 && e[:11] == "HTTPS_PROXY" { hasHttps = true }
+		}
+		
+		if !hasHttp && os.Getenv("HTTP_PROXY") != "" {
+			envVars = append(envVars, "HTTP_PROXY="+os.Getenv("HTTP_PROXY"))
+		}
+		if !hasHttps && os.Getenv("HTTPS_PROXY") != "" {
+			envVars = append(envVars, "HTTPS_PROXY="+os.Getenv("HTTPS_PROXY"))
+		}
+		cmd.Env = envVars
+
 		output, lastErr = cmd.CombinedOutput()
 
 		if ctx.Err() != nil {

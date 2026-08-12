@@ -13,6 +13,7 @@ require (
 	github.com/ulule/limiter/v3 v3.11.2
 	golang.org/x/crypto v0.54.0
 	gorm.io/driver/postgres v1.6.0
+	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.31.2
 )
 

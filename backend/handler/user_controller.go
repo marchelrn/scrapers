@@ -17,7 +17,11 @@ func (ctrl *UserController) InitService(s *contract.Service) {
 }
 
 func (ctrl *UserController) GetAll(c *gin.Context) {
-	user, err := ctrl.userService.GetAll()
+	userID, exists := c.Get("user_id") // get users id
+	if !exists {
+		response.BadRequest(c, "Unauthorized")
+	}
+	user, err := ctrl.userService.GetAll(userID.(string))
 	if err != nil {
 		response.InternalServerError(c, err.Error())
 		return

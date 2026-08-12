@@ -56,11 +56,44 @@ func (s *ScheduleService) StartScheduler() error {
 
 	for _, sch := range schedules {
 		if sch.Enabled {
-			s.registerJobInternal(sch)
+			config, err := s.configRepo.GetByID(sch.ConfigID, "", models.UserRoleAdmin)
+			if err == nil && config.Status == models.ScrapingConfigStatusActive {
+				if !config.ScheduleEnabled {
+					config.ScheduleEnabled = true
+					_ = s.configRepo.Update(config)
+				}
+				s.registerJobInternal(sch)
+			}
 		}
 	}
 
 	s.cronRunner.Start()
+
+	// Calculate and update next_run for all enabled schedules upon start
+	for _, sch := range schedules {
+		if sch.Enabled {
+			entryID, exists := s.entryIDs[sch.ID]
+			if exists {
+				entry := s.cronRunner.Entry(entryID)
+				loc, err := time.LoadLocation(sch.Timezone)
+				if err != nil {
+					loc = time.Local
+				}
+				nextRun := entry.Next
+				if nextRun.IsZero() && entry.Schedule != nil {
+					nextRun = entry.Schedule.Next(time.Now().In(loc))
+				}
+				if !nextRun.IsZero() {
+					schModel, err := s.scheduleRepo.GetByID(sch.ID, "", models.UserRoleAdmin)
+					if err == nil {
+						schModel.NextRun = &nextRun
+						_ = s.scheduleRepo.Update(schModel)
+					}
+				}
+			}
+		}
+	}
+
 	log.Println("Scheduler runtime started")
 	return nil
 }
@@ -92,8 +125,8 @@ func (s *ScheduleService) registerJobInternal(sch models.Schedule) {
 	jobFunc := func() {
 		// Verify config is still active before running
 		config, err := s.configRepo.GetByID(sch.ConfigID, "", models.UserRoleAdmin)
-		if err != nil || config.Status != models.ScrapingConfigStatusActive || !config.ScheduleEnabled {
-			log.Printf("Schedule %d skipped: config %s is not active/enabled\n", sch.ID, sch.ConfigID)
+		if err != nil || config.Status != models.ScrapingConfigStatusActive {
+			log.Printf("Schedule %d skipped: config %s is missing or not active\n", sch.ID, sch.ConfigID)
 			return
 		}
 
@@ -121,8 +154,9 @@ func (s *ScheduleService) registerJobInternal(sch models.Schedule) {
 			}
 		}
 
-		// Calculate and update next_run
-		s.updateNextRunInternal(sch.ID)
+		// Calculate and update next_run in a separate goroutine so it doesn't block job creation
+		// Also avoids potential deadlock if updateNextRunInternal needs a lock that cron runner holds during job execution
+		go s.updateNextRunInternal(sch.ID)
 	}
 
 	// Robfig cron supports "TZ=Asia/Makassar 0 * * * *" format
@@ -150,9 +184,20 @@ func (s *ScheduleService) updateNextRunInternal(scheduleID int) {
 	entry := s.cronRunner.Entry(entryID)
 	nextRun := entry.Next
 
-	// Update DB (using admin access)
 	sch, err := s.scheduleRepo.GetByID(scheduleID, "", models.UserRoleAdmin)
-	if err == nil {
+	if err != nil {
+		return
+	}
+
+	if nextRun.IsZero() && entry.Schedule != nil {
+		loc, err := time.LoadLocation(sch.Timezone)
+		if err != nil {
+			loc = time.Local
+		}
+		nextRun = entry.Schedule.Next(time.Now().In(loc))
+	}
+
+	if !nextRun.IsZero() {
 		sch.NextRun = &nextRun
 		_ = s.scheduleRepo.Update(sch)
 	}
@@ -192,13 +237,22 @@ func (s *ScheduleService) Create(req dto.CreateScheduleRequest, userID string, u
 		return nil, errors.New("failed to create schedule")
 	}
 
+	if schedule.Enabled && config.Status == models.ScrapingConfigStatusActive {
+		if !config.ScheduleEnabled {
+			config.ScheduleEnabled = true
+			_ = s.configRepo.Update(config)
+		}
+	}
+
 	s.mu.Lock()
-	if schedule.Enabled && config.Status == models.ScrapingConfigStatusActive && config.ScheduleEnabled {
+	if schedule.Enabled && config.Status == models.ScrapingConfigStatusActive {
 		s.registerJobInternal(*schedule)
-		s.mu.Unlock()
+	}
+	s.mu.Unlock()
+
+	// Update NextRun outside of lock to prevent deadlock
+	if schedule.Enabled && config.Status == models.ScrapingConfigStatusActive {
 		s.updateNextRunInternal(schedule.ID)
-	} else {
-		s.mu.Unlock()
 	}
 
 	// Fetch updated object for accurate NextRun
@@ -216,6 +270,22 @@ func (s *ScheduleService) GetAll(configID *string, userID string, userRole strin
 
 	responses := make([]dto.ScheduleResponse, 0, len(schedules))
 	for _, sch := range schedules {
+		if sch.Enabled && sch.NextRun == nil {
+			s.mu.Lock()
+			if entryID, exists := s.entryIDs[sch.ID]; exists {
+				entry := s.cronRunner.Entry(entryID)
+				if entry.Schedule != nil {
+					loc, err := time.LoadLocation(sch.Timezone)
+					if err != nil {
+						loc = time.Local
+					}
+					nextRun := entry.Schedule.Next(time.Now().In(loc))
+					sch.NextRun = &nextRun
+					_ = s.scheduleRepo.Update(&sch)
+				}
+			}
+			s.mu.Unlock()
+		}
 		responses = append(responses, dto.ToScheduleResponse(sch))
 	}
 	return responses, nil
@@ -257,6 +327,8 @@ func (s *ScheduleService) Update(id int, req dto.UpdateScheduleRequest, userID s
 		return nil, errors.New("failed to update schedule")
 	}
 
+	config, _ := s.configRepo.GetByID(schedule.ConfigID, "", models.UserRoleAdmin)
+
 	s.mu.Lock()
 	if !schedule.Enabled {
 		// Remove from cron if disabled
@@ -267,11 +339,18 @@ func (s *ScheduleService) Update(id int, req dto.UpdateScheduleRequest, userID s
 		// Reset next_run
 		schedule.NextRun = nil
 		_ = s.scheduleRepo.Update(schedule)
-		s.mu.Unlock()
 	} else {
-		// Re-register if enabled
-		s.registerJobInternal(*schedule)
-		s.mu.Unlock()
+		if config != nil && config.Status == models.ScrapingConfigStatusActive {
+			if !config.ScheduleEnabled {
+				config.ScheduleEnabled = true
+				_ = s.configRepo.Update(config)
+			}
+			s.registerJobInternal(*schedule)
+		}
+	}
+	s.mu.Unlock()
+
+	if schedule.Enabled && config != nil && config.Status == models.ScrapingConfigStatusActive {
 		s.updateNextRunInternal(schedule.ID)
 	}
 
@@ -302,7 +381,7 @@ func (s *ScheduleService) Delete(id int, userID string, userRole string) error {
 
 // validateCronExpression checks if a cron expression is valid using robfig/cron.
 func (s *ScheduleService) validateCronExpression(expression string) error {
-	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
+	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
 	_, err := parser.Parse(expression)
 	if err != nil {
 		return errors.New("invalid cron expression: " + err.Error())

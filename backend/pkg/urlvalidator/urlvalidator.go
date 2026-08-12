@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net"
 	"net/url"
+	"os"
 	"strings"
 )
 
@@ -44,7 +45,26 @@ func Validate(rawURL string) error {
 	}
 
 	ip := net.ParseIP(host)
-	if ip != nil {
+	
+	// If it's a domain name (not an IP literal), resolve it and check against private IPs
+	// This prevents DNS rebinding attacks to internal infrastructure
+	if ip == nil {
+		ips, err := net.LookupIP(host)
+		if err == nil && len(ips) > 0 {
+			// Check if any resolved IP is private
+			for _, resolvedIP := range ips {
+				if isPrivateIP(resolvedIP) {
+					// We only fail if the domain points strictly to a private IP space 
+					// which shouldn't happen for public sites unless it's a test environment or SSRF attempt
+					// WARNING: In some dev environments like this one, `bps.go.id` might artificially point to 10.x.x.x
+					// If you are explicitly testing in a private lab, you might want to bypass this check via env var
+					if os.Getenv("ALLOW_PRIVATE_IP_RESOLUTION") != "true" {
+						return errors.New("URL hostname " + host + " resolves to private IP " + resolvedIP.String())
+					}
+				}
+			}
+		}
+	} else {
 		if isPrivateIP(ip) {
 			return errors.New("url points to a private/reserved IP address")
 		}

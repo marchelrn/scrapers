@@ -1,6 +1,8 @@
 requests
+requests_html
 beautifulsoup4
 lxml
 selenium
 playwright
 ddgs
+lxml_html_clean
