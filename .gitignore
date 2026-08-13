@@ -6,5 +6,7 @@ tmp/
 .idea
 sql/
 goose
-workers/python/__pycache__
-workers/python/venv
+backend/workers/python/__pycache__
+backend/workers/python/venv
+backend/workers/python/data_scraping
+catatan.md

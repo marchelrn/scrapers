@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Settings, Briefcase, Calendar,
-  KeyRound, Users, LogOut, ChevronRight, Activity, UserCheck
+  KeyRound, Users, LogOut, ChevronRight
 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 
@@ -30,12 +30,8 @@ export function Sidebar() {
     <aside className="flex flex-col w-64 min-h-screen bg-surface-900 border-r border-surface-700 shrink-0">
       {/* Logo */}
       <div className="flex items-center gap-3 px-6 py-5 border-b border-surface-700">
-        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-500 to-teal-600 flex items-center justify-center shadow-lg shadow-brand-900/50">
-          <Activity className="w-5 h-5 text-white" />
-        </div>
         <div>
-          <p className="text-sm font-bold text-white leading-tight">ScraperBPS</p>
-          <p className="text-[10px] text-brand-400 font-medium uppercase tracking-widest">Platform</p>
+          <p className="text-xl font-bold text-white leading-tight">Scrapers</p>
         </div>
       </div>
 
@@ -95,9 +91,6 @@ export function Sidebar() {
       {/* User footer */}
       <div className="px-3 py-4 border-t border-surface-700 space-y-1">
         <div className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-gray-400 bg-surface-800/60">
-          <div className="w-7 h-7 rounded-lg bg-brand-700/40 flex items-center justify-center">
-            <UserCheck className="w-3.5 h-3.5 text-brand-300" />
-          </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-gray-300 truncate">{user?.name ?? 'Operator BPS'}</p>
             <p className="text-[10px] text-brand-400 font-mono uppercase truncate">{user?.role ?? 'operator'}</p>

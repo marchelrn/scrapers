@@ -5,7 +5,7 @@ import { useAuthStore } from '../store/authStore'
 import { Activity, Lock, Mail, User, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-export function JobHistory() {
+export function Login() {
   const navigate = useNavigate()
   const login = useAuthStore((s) => s.login)
 
@@ -16,7 +16,7 @@ export function JobHistory() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [role, setRole] = useState<'admin' | 'operator'>('operator')
+  // const [role, setRole] = useState<'admin' | 'operator'>('operator')
   const [showPassword, setShowPassword] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -26,7 +26,7 @@ export function JobHistory() {
 
     try {
       if (isRegister) {
-        await authApi.register({ name, email, password, role })
+        await authApi.register({ name, email, password}) // if needed u can add role payload
         toast.success('Registrasi berhasil! Silakan login.')
         setIsRegister(false)
       } else {
@@ -130,19 +130,19 @@ export function JobHistory() {
             </div>
           </div>
 
-          {isRegister && (
-            <div className="form-group">
-              <label className="label">Role Akun</label>
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value as 'admin' | 'operator')}
-                className="input"
-              >
-                <option value="operator">Operator (Pengelola Scraper)</option>
-                <option value="admin">Administrator</option>
-              </select>
-            </div>
-          )}
+          {/*{isRegister && (*/}
+          {/*  <div className="form-group">*/}
+          {/*    <label className="label">Role Akun</label>*/}
+          {/*    <select*/}
+          {/*      value={role}*/}
+          {/*      onChange={(e) => setRole(e.target.value as 'admin' | 'operator')}*/}
+          {/*      className="input"*/}
+          {/*    >*/}
+          {/*      <option value="operator">Operator (Pengelola Scraper)</option>*/}
+          {/*      <option value="admin">Administrator</option>*/}
+          {/*    </select>*/}
+          {/*  </div>*/}
+          {/*)}*/}
 
           <button
             type="submit"

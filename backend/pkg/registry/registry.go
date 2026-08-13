@@ -31,6 +31,7 @@ type ParameterDefinition struct {
 	Required    bool
 	Default     interface{}
 	Placeholder string
+	Description string
 }
 
 // Registry manages available scraping methods.

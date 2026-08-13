@@ -49,14 +49,12 @@ export function UsersPage() {
     <div>
       <Header
         title="Manajemen Pengguna System (Admin Only)"
-        subtitle="Kelola akun pengguna, hak akses role (Admin / Operator), dan otorisasi."
       />
 
       <div className="p-8 space-y-6 max-w-7xl mx-auto">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-white">Daftar Pengguna</h2>
-            <p className="text-xs text-gray-400">Total {users.length} pengguna terdaftar</p>
           </div>
         </div>
 

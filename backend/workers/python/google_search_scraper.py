@@ -27,12 +27,24 @@ except ImportError:
 MAX_ARTICLE_TEXT_LENGTH = 15000  # Cap per article text (~15KB)
 MAX_SNIPPET_LENGTH = 1000        # Cap snippet length (~1KB)
 
-
 def _clean_text(text):
-    """Removes non-printable ASCII control characters from string to prevent JSON corruption."""
+    """Removes non-printable ASCII control characters and specific corrupt unicode strings to prevent JSON corruption."""
     if not text:
         return ""
-    return re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', text)
+    # Strip basic control chars
+    clean = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', text)
+    # Strip non-standard unicode garbage often injected by bot-protection or malformed encoding
+    clean = re.sub(r'[\u200b\u200e\u200f\u2028\u202a-\u202e\u2060-\u206f\ufff0-\uffff]', '', clean)
+    
+    # Heuristic to detect fully encrypted/garbled WAF responses (like Cloudflare Captcha pages)
+    if len(clean) > 100:
+        # Check ratio of weird symbols/letters to total length
+        # A normal text has mostly letters, numbers, and common punctuation.
+        alnum_count = sum(1 for c in clean if c.isalnum() or c.isspace() or c in '.,;:-?!()\'"')
+        if alnum_count / len(clean) < 0.6: # If less than 60% of the text is normal words/punctuation, it's garbled
+            return ""
+            
+    return clean.strip()
 
 
 def _search_ddg_fallback(query, max_results):
@@ -89,6 +101,7 @@ def _fetch_article_content(item):
     article_url = item.get("link")
     article_title = _clean_text(item.get("title", ""))
     snippet = _clean_text(item.get("snippet", ""))
+    proxies = item.get("_proxies", {})
 
     if len(snippet) > MAX_SNIPPET_LENGTH:
         snippet = snippet[:MAX_SNIPPET_LENGTH] + "..."
@@ -108,7 +121,16 @@ def _fetch_article_content(item):
             "Accept-Language": "en-US,en;q=0.9",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
         }
-        page_res = requests.get(article_url, headers=headers, timeout=(3.0, 5.0), stream=True)
+        
+        req_kwargs = {
+            "headers": headers, 
+            "timeout": (3.0, 5.0), 
+            "stream": True
+        }
+        if proxies:
+            req_kwargs["proxies"] = proxies
+            
+        page_res = requests.get(article_url, **req_kwargs)
 
         if page_res.status_code == 200:
             content_type = page_res.headers.get("Content-Type", "").lower()
@@ -123,22 +145,58 @@ def _fetch_article_content(item):
                 }
 
             # Read at most 200KB of response HTML to prevent hanging on huge downloads
-            raw_bytes = page_res.raw.read(200000)
+            # Note: If the content is compressed with gzip/brotli, reading raw directly 
+            # might return compressed bytes. Better to use page_res.iter_content or page_res.content
+            # but bounded to avoid memory explosion.
+            
+            # We will read chunks until we hit 250KB or EOF
+            # We use iter_content with decode_unicode=True so it automatically handles gzip/deflate
+            # and returns decoded unicode strings directly if possible, preventing mangled text
+            chunks = []
+            bytes_read = 0
+            for chunk in page_res.iter_content(chunk_size=16384, decode_unicode=True):
+                if chunk:
+                    # Depending on requests version, decode_unicode=True might return str instead of bytes
+                    if isinstance(chunk, bytes):
+                        chunks.append(chunk)
+                        bytes_read += len(chunk)
+                    else:
+                        chunks.append(chunk.encode('utf-8', errors='ignore'))
+                        bytes_read += len(chunk.encode('utf-8'))
+                        
+                    if bytes_read > 250000:
+                        break
+            
             page_res.close()
-            encoding = page_res.encoding or 'utf-8'
-            html_text = raw_bytes.decode(encoding, errors='ignore')
+            
+            raw_bytes = b"".join(chunks)
+            # We enforce UTF-8 since we already handled decoding in iter_content when possible
+            html_text = raw_bytes.decode('utf-8', errors='ignore')
 
             soup = BeautifulSoup(html_text, 'html.parser')
 
-            # Remove junk
-            for element in soup(["script", "style", "nav", "footer", "header", "aside", "form"]):
+            # Remove junk (noting that removing header, footer, nav can drop core content on some sites like portfolios, 
+            # but usually for news articles we DO want to remove them. We'll leave them to remove navigation but keep main content)
+            for element in soup(["script", "style", "nav", "footer", "aside", "form"]):
                 element.extract()
 
-            # Extract paragraphs
-            paragraphs = soup.find_all('p')
-            texts = [p.get_text(separator=' ', strip=True) for p in paragraphs]
-            texts = [t for t in texts if len(t) > 30]
-            extracted_text = "\n".join(texts)
+            # For generic search content extraction, try to find a meaningful container or fallback to p tags
+            # Try to grab paragraphs and lists
+            content_tags = soup.find_all(['p', 'li', 'h1', 'h2', 'h3', 'h4', 'td'])
+            texts = [p.get_text(separator=' ', strip=True) for p in content_tags]
+            
+            # Remove very short navigation-like links that survived
+            texts = [t for t in texts if len(t) > 35]
+            
+            # Deduplicate while preserving order
+            seen = set()
+            dedup_texts = []
+            for t in texts:
+                if t not in seen:
+                    dedup_texts.append(t)
+                    seen.add(t)
+                    
+            extracted_text = "\n".join(dedup_texts)
 
             if len(extracted_text) < 100:
                 extracted_text = snippet
@@ -222,8 +280,22 @@ def scrape(config_params):
         return []
 
     # 2. Extract content from each URL in parallel with non-blocking shutdown
+    # Add proxy capability from environment variables
+    import os
+    http_proxy = os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy")
+    https_proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
+    proxies = {}
+    if http_proxy:
+        proxies["http"] = http_proxy
+    if https_proxy:
+        proxies["https"] = https_proxy
+        
+    def fetch_with_proxy(item):
+        item["_proxies"] = proxies
+        return _fetch_article_content(item)
+
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=5)
-    futures = {executor.submit(_fetch_article_content, item): item for item in items}
+    futures = {executor.submit(fetch_with_proxy, item): item for item in items}
     final_results = []
 
     try:
@@ -242,6 +314,53 @@ def scrape(config_params):
     # Sort final_results to match the order of items
     url_to_index = {item.get("link"): i for i, item in enumerate(items)}
     final_results.sort(key=lambda r: url_to_index.get(r.get("url"), 999))
+
+    # 3. Opsional: Integrasi Gemini AI untuk Meringkas & Memfilter Konten
+    ai_instruction = config_params.get("ai_instruction", "").strip()
+    gemini_api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+
+    if ai_instruction and gemini_api_key:
+        try:
+            import google.generativeai as genai
+            genai.configure(api_key=gemini_api_key)
+            model = genai.GenerativeModel("gemini-1.5-flash") # Use fast model
+            
+            for res in final_results:
+                raw_content = res.get("content", "")
+                if not raw_content or len(raw_content) < 50:
+                    continue
+                
+                # Buat prompt yang menggabungkan instruksi user dan teks konten mentah
+                prompt = f"""
+Anda adalah AI asisten analisis data BPS.
+Instruksi Filter & Ringkas: {ai_instruction}
+
+Berdasarkan instruksi di atas, analisis dan ringkas teks berita di bawah ini.
+Jika teks berita TIDAK RELEVAN dengan instruksi (misalnya instruksi meminta fenomena pertanian tapi berita berisi pelantikan pejabat/politik), KEMBALIKAN TEKS KOSONG atau tulis "TIDAK RELEVAN".
+Jika relevan, berikan ringkasan yang padat, jelas, dan hanya memuat informasi/data yang diminta.
+
+Teks Berita:
+{raw_content[:8000]} # Batasi 8000 karakter agar hemat token
+"""
+                try:
+                    response = model.generate_content(prompt)
+                    ai_result = response.text.strip()
+                    
+                    if "TIDAK RELEVAN" in ai_result.upper() or len(ai_result) < 10:
+                        res["ai_filtered"] = True
+                        res["content"] = "[AI Filtered: Tidak Relevan dengan Instruksi]"
+                    else:
+                        res["ai_filtered"] = False
+                        res["content"] = ai_result
+                except Exception as e:
+                    # Fallback jika gemini limit/error
+                    res["content"] = f"[AI Error: {str(e)}] " + raw_content
+                    
+            # Hapus hasil yang ditandai tidak relevan oleh AI
+            final_results = [r for r in final_results if not r.get("ai_filtered", False)]
+            
+        except ImportError:
+            pass # google-generativeai module not installed
 
     return final_results
 

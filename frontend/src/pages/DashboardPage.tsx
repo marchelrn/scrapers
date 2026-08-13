@@ -64,16 +64,11 @@ export function DashboardPage() {
       <div>
         <Header
             title="Dashboard Scraping BPS"
-            subtitle="Ringkasan performa worker, eksekusi job, dan status sistem secara real-time."
         />
 
         <div className="p-8 space-y-8 max-w-7xl mx-auto">
           {/* Top actions */}
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-white">Ringkasan Sistem</h2>
-              <p className="text-xs text-gray-400">Data otomatis diperbarui setiap 30 detik</p>
-            </div>
+          <div className="flex items-center justify-end ">
             <button
                 onClick={handleManualRefresh}
                 disabled={refreshing}
@@ -183,7 +178,6 @@ export function DashboardPage() {
             <div className="p-5 border-b border-surface-700 flex items-center justify-between">
               <div>
                 <h3 className="text-base font-bold text-white">Job Terbaru</h3>
-                <p className="text-xs text-gray-400">5 riwayat eksekusi pekerjaan scraping terkini</p>
               </div>
               <Link to="/jobs" className="btn-ghost text-xs text-brand-400 hover:text-brand-300">
                 <span>Lihat Semua</span>

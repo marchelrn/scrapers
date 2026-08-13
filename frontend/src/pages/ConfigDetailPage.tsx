@@ -3,7 +3,8 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { Header } from '../components/layout/Header'
 import { configsApi } from '../api/configs'
 import type { ScrapingConfig } from '../types'
-import { ArrowLeft, Play, CheckCircle2, XCircle, Code2 } from 'lucide-react'
+import { ArrowLeft, Play, CheckCircle2, XCircle, Code2, Edit3 } from 'lucide-react'
+import { UpdateConfigModal } from '../components/shared/UpdateConfigModal'
 import toast from 'react-hot-toast'
 
 export function ConfigDetailPage() {
@@ -11,6 +12,7 @@ export function ConfigDetailPage() {
   const navigate = useNavigate()
   const [config, setConfig] = useState<ScrapingConfig | null>(null)
   const [loading, setLoading] = useState(true)
+  const [showUpdateModal, setShowUpdateModal] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -76,10 +78,16 @@ export function ConfigDetailPage() {
             {config.description && <p className="text-xs text-gray-400 mt-1">{config.description}</p>}
           </div>
 
-          <button onClick={handleRun} className="btn-primary text-xs py-2.5">
-            <Play className="w-4 h-4" />
-            <span>Jalankan Sekarang</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setShowUpdateModal(true)} className="btn-secondary text-xs py-2.5">
+              <Edit3 className="w-4 h-4 text-brand-300" />
+              <span>Update Konfigurasi</span>
+            </button>
+            <button onClick={handleRun} className="btn-primary text-xs py-2.5">
+              <Play className="w-4 h-4" />
+              <span>Jalankan Sekarang</span>
+            </button>
+          </div>
         </div>
 
         {/* Grid Parameters & Meta */}
@@ -128,6 +136,16 @@ export function ConfigDetailPage() {
           </div>
         </div>
       </div>
+
+      <UpdateConfigModal
+        config={config}
+        isOpen={showUpdateModal}
+        onClose={() => setShowUpdateModal(false)}
+        onSuccess={() => {
+          if (!id) return
+          configsApi.getById(id).then((res) => setConfig(res))
+        }}
+      />
     </div>
   )
 }

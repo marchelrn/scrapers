@@ -95,14 +95,12 @@ export function SchedulesPage() {
     <div>
       <Header
         title="Jadwal Eksekusi Otomatis (Scheduler)"
-        subtitle="Atur waktu eksekusi berkala untuk menjalankan scraping secara otomatis tanpa koding."
       />
 
       <div className="p-8 space-y-6 max-w-7xl mx-auto">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-white">Daftar Jadwal Active</h2>
-            <p className="text-xs text-gray-400">Total {schedules.length} jadwal terdaftar dalam sistem</p>
           </div>
           <button onClick={() => setShowModal(true)} className="btn-primary text-xs">
             <Plus className="w-4 h-4" />
@@ -170,8 +168,19 @@ export function SchedulesPage() {
                             )}
                           </button>
                         </td>
-                        <td className="text-xs text-gray-300">
-                          {s.next_run ? new Date(s.next_run).toLocaleString('id-ID') : '-'}
+                        <td className="text-xs text-gray-300 font-mono">
+                          {(() => {
+                            if (!s.next_run) return '-'
+                            const d = new Date(s.next_run)
+                            if (isNaN(d.getTime()) || d.getFullYear() < 2000) return '-'
+                            return d.toLocaleString('id-ID', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })
+                          })()}
                         </td>
                         <td className="text-right">
                           <button

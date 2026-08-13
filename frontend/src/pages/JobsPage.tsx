@@ -54,14 +54,12 @@ export function JobsPage() {
     <div>
       <Header
         title="Riwayat Scraping Jobs"
-        subtitle="Daftar eksekusi job scraping manual maupun otomatis dari scheduler."
       />
 
       <div className="p-8 space-y-6 max-w-7xl mx-auto">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-white">Daftar Pekerjaan (Jobs)</h2>
-            <p className="text-xs text-gray-400">Menampilkan hingga {limit} item per halaman</p>
           </div>
 
           <button
@@ -86,7 +84,7 @@ export function JobsPage() {
                   <th>Status</th>
                   <th>Waktu Mulai</th>
                   <th>Waktu Selesai</th>
-                  <th className="text-right">Aksi</th>
+                  <th className="text-center">Aksi</th>
                 </tr>
               </thead>
               <tbody>

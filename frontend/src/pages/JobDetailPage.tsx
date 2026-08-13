@@ -49,8 +49,18 @@ export function JobDetailPage() {
   const flattenedRows = useMemo(() => {
     if (!job?.results || job.results.length === 0) return []
     const rows: Record<string, any>[] = []
+    
+    // Check if the overall result structure from backend is { error, method, status, results, metadata }
+    // If so, we only care about the nested "results" property
     job.results.forEach((item) => {
-      const json = item.result_json
+      let json = item.result_json as any
+      
+      // Handle the case where the JSON output format has the inner "results" array payload
+      // This matches the DTO wrapper structure {"error": null, "method": "...", "results": [...]}
+      if (json && typeof json === 'object' && 'results' in json && 'status' in json && 'method' in json) {
+        json = json.results
+      }
+      
       if (Array.isArray(json)) {
         json.forEach((sub) => {
           if (typeof sub === 'object' && sub !== null) {
@@ -229,7 +239,7 @@ export function JobDetailPage() {
             }`}
           >
             <Database className="w-4 h-4" />
-            <span>Tab Results (Hasil Scraping)</span>
+            <span>Results</span>
             {flattenedRows.length > 0 && (
               <span className="bg-brand-500/20 text-brand-300 text-[11px] px-2 py-0.5 rounded-full font-mono">
                 {flattenedRows.length}
@@ -246,7 +256,7 @@ export function JobDetailPage() {
             }`}
           >
             <Terminal className="w-4 h-4" />
-            <span>Tab Logs (Terminal Process)</span>
+            <span>Terminal Process</span>
             {job.logs && job.logs.length > 0 && (
               <span className="bg-surface-700 text-gray-300 text-[11px] px-2 py-0.5 rounded-full font-mono">
                 {job.logs.length}
@@ -262,9 +272,8 @@ export function JobDetailPage() {
               <div>
                 <h3 className="text-xs font-bold text-teal-300 uppercase tracking-wider flex items-center gap-2">
                   <Database className="w-4 h-4" />
-                  <span>Data Ekstraksi Artikel / Teks Target</span>
+                  <span>Data Ekstraksi</span>
                 </h3>
-                <p className="text-xs text-gray-400 mt-0.5">Tampilan tabel data interaktif dengan opsi unduh Excel/CSV</p>
               </div>
 
               {flattenedRows.length > 0 && (

@@ -5,7 +5,7 @@ import toast from 'react-hot-toast'
 
 interface VisualSelectorModalProps {
   initialUrl: string
-  onSelectSelector: (selector: string) => void
+  onSelectSelector: (selector: string, finalUrl?: string) => void
   onClose: () => void
 }
 
@@ -103,7 +103,7 @@ export function VisualSelectorModal({ initialUrl, onSelectSelector, onClose }: V
       toast.error('Pilih elemen di dalam pratinjau halaman terlebih dahulu')
       return
     }
-    onSelectSelector(selectedCss)
+    onSelectSelector(selectedCss, url)
     onClose()
   }
 

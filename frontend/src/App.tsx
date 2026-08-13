@@ -3,7 +3,7 @@ import { Toaster } from 'react-hot-toast'
 import { Layout } from './components/layout/Layout'
 import { ProtectedRoute } from './components/shared/ProtectedRoute'
 
-import { LoginPage } from './pages/LoginPage'
+import { Login } from './pages/Login.tsx'
 import { DashboardPage } from './pages/DashboardPage'
 import { ConfigsPage } from './pages/ConfigsPage'
 import { ConfigDetailPage } from './pages/ConfigDetailPage'
@@ -29,7 +29,7 @@ export default function App() {
       />
       <Routes>
         {/* Public Routes */}
-        <Route path="/login" element={<LoginPage />} />
+        <Route path="/login" element={<Login />} />
 
         {/* Protected Routes */}
         <Route element={<ProtectedRoute />}>

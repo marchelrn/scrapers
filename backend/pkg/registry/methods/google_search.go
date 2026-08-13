@@ -57,6 +57,14 @@ func (m *GoogleSearchMethod) ParameterDefinitions() []registry.ParameterDefiniti
 			Default:  10,
 		},
 		{
+			Name:        "ai_instruction",
+			Label:       "AI Instruction / Prompt",
+			Type:        "text",
+			Required:    false,
+			Placeholder: "e.g. Ringkas dan ekstrak hanya data mengenai komoditas Pertanian",
+			Description: "Gunakan LLM (Gemini) untuk meringkas dan menyaring teks hasil ekstraksi berdasarkan instruksi.",
+		},
+		{
 			Name:     "auth_type",
 			Label:    "Authentication Type",
 			Type:     "text",

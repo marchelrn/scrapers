@@ -74,14 +74,12 @@ export function SecretsPage() {
     <div>
       <Header
         title="Manajemen Secrets & Credential Target"
-        subtitle="Simpan API Key, Bearer Token, atau Cookie otentikasi tanpa menyimpannya di plaintext."
       />
 
       <div className="p-8 space-y-6 max-w-7xl mx-auto">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-white">Daftar Credentials</h2>
-            <p className="text-xs text-gray-400">Semua kredensial tersensor secara otomatis di log aplikasi</p>
           </div>
           <button onClick={() => setShowModal(true)} className="btn-primary text-xs">
             <Plus className="w-4 h-4" />

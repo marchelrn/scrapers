@@ -7,9 +7,10 @@ import { schedulesApi } from '../api/schedules'
 import type { ScrapingConfig, Method, Secret } from '../types'
 import { VisualSelectorModal } from '../components/shared/VisualSelectorModal'
 import { LowCodeSchedulePicker } from '../components/shared/LowCodeSchedulePicker'
+import { UpdateConfigModal } from '../components/shared/UpdateConfigModal'
 import {
   Plus, Play, Trash2, CheckCircle, XCircle,
-  MousePointer, Loader2, KeyRound, Calendar, Lock
+  MousePointer, Loader2, KeyRound, Calendar, Lock, Edit3
 } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
@@ -26,6 +27,8 @@ export function ConfigsPage() {
   const [showVisualSelector, setShowVisualSelector] = useState(false)
   const [showScheduleModal, setShowScheduleModal] = useState(false)
   const [selectedConfigForSchedule, setSelectedConfigForSchedule] = useState<ScrapingConfig | null>(null)
+  const [showUpdateModal, setShowUpdateModal] = useState(false)
+  const [selectedConfigForUpdate, setSelectedConfigForUpdate] = useState<ScrapingConfig | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   // Form Basic Info State
@@ -148,6 +151,7 @@ export function ConfigsPage() {
         description: description || undefined,
         method_code: methodCode,
         status,
+        schedule_enabled: true, // Auto-enable to ensure scheduler can trigger it
         parameters: paramsPayload,
       })
 
@@ -188,6 +192,11 @@ export function ConfigsPage() {
     setShowScheduleModal(true)
   }
 
+  const handleOpenUpdateModal = (config: ScrapingConfig) => {
+    setSelectedConfigForUpdate(config)
+    setShowUpdateModal(true)
+  }
+
   const handleCreateSchedule = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedConfigForSchedule) return
@@ -217,18 +226,17 @@ export function ConfigsPage() {
     return code
   }
 
+  // @ts-ignore
   return (
     <div>
       <Header
         title="Konfigurasi Scraping BPS"
-        subtitle="Kelola metode scraping, blueprint dynamic form, visual selector proxy, dan penjadwalan."
       />
 
       <div className="p-8 space-y-6 max-w-7xl mx-auto">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-white">Daftar Konfigurasi</h2>
-            <p className="text-xs text-gray-400">Total {configs.length} konfigurasi aktif/inaktif</p>
           </div>
           <button
             onClick={() => setShowCreateModal(true)}
@@ -316,6 +324,14 @@ export function ConfigsPage() {
                               <span>Run</span>
                             </button>
                             <button
+                              onClick={() => handleOpenUpdateModal(c)}
+                              className="btn-secondary btn-sm text-brand-300 border-brand-500/40 hover:bg-brand-500/10 flex items-center gap-1"
+                              title="Update / Edit Konfigurasi"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                              <span>Edit</span>
+                            </button>
+                            <button
                               onClick={() => handleDelete(c.id)}
                               className="btn-danger btn-sm"
                               title="Hapus Config"
@@ -377,7 +393,7 @@ export function ConfigsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="form-group">
-                  <label className="label">Metode Scraping (Dinamis / GET methods)</label>
+                  <label className="label">Metode Scraping</label>
                   <select
                     value={methodCode}
                     onChange={(e) => setMethodCode(e.target.value)}
@@ -385,13 +401,13 @@ export function ConfigsPage() {
                   >
                     {methods.length === 0 ? (
                       <>
-                        <option value="target_url">Target URL HTML/CSS Scraping</option>
-                        <option value="google_search">Web Search News (DuckDuckGo)</option>
+                        <option value="target_url">Target URL</option>
+                        <option value="google_search">Web Search (News)</option>
                       </>
                     ) : (
                       methods.map((m) => (
                         <option key={m.code} value={m.code}>
-                          {m.name} ({m.code})
+                          {m.name}
                         </option>
                       ))
                     )}
@@ -405,8 +421,8 @@ export function ConfigsPage() {
                     onChange={(e) => setStatus(e.target.value as 'active' | 'inactive')}
                     className="input"
                   >
-                    <option value="active">Active (Siap dieksekusi)</option>
-                    <option value="inactive">Inactive</option>
+                    <option value="active">active</option>
+                    <option value="inactive">inactive</option>
                   </select>
                 </div>
               </div>
@@ -431,7 +447,7 @@ export function ConfigsPage() {
                             : 'text-gray-400 hover:text-gray-200'
                         }`}
                       >
-                        1. Low Code (Keyword)
+                        1. Low Code
                       </button>
                       <button
                         type="button"
@@ -445,7 +461,7 @@ export function ConfigsPage() {
                             : 'text-gray-400 hover:text-gray-200'
                         }`}
                       >
-                        2. Visual Selector (Point & Click)
+                        2. Visual Selector
                       </button>
                     </div>
                   </div>
@@ -473,9 +489,6 @@ export function ConfigsPage() {
                         onChange={(e) => setKeyword(e.target.value)}
                         className="input"
                       />
-                      <p className="text-[11px] text-gray-400 mt-1">
-                        Backend otomatis mengekstrak paragraf & tabel yang memuat kata kunci ini.
-                      </p>
                     </div>
                   ) : (
                     <div className="form-group">
@@ -640,8 +653,11 @@ export function ConfigsPage() {
       {showVisualSelector && (
         <VisualSelectorModal
           initialUrl={targetUrl}
-          onSelectSelector={(generatedCss) => {
+          onSelectSelector={(generatedCss, newTargetUrl) => {
             setSelector(generatedCss)
+            if (newTargetUrl) {
+              setTargetUrl(newTargetUrl)
+            }
             toast.success(`CSS Selector terpilih: ${generatedCss}`)
           }}
           onClose={() => setShowVisualSelector(false)}
@@ -687,6 +703,16 @@ export function ConfigsPage() {
           </div>
         </div>
       )}
+
+      {/* Update Config Modal Overlay */}
+      <UpdateConfigModal
+        config={selectedConfigForUpdate}
+        isOpen={showUpdateModal}
+        onClose={() => setShowUpdateModal(false)}
+        onSuccess={fetchInitialData}
+        initialMethods={methods}
+        initialSecrets={secrets}
+      />
     </div>
   )
 }
