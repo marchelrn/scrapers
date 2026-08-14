@@ -2,7 +2,8 @@ import { useEffect, useState, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { Header } from '../components/layout/Header'
 import { jobsApi } from '../api/jobs'
-import type { ScrapingJob } from '../types'
+import { configsApi } from '../api/configs'
+import type { ScrapingJob, ScrapingConfig } from '../types'
 import {
   ArrowLeft, CheckCircle2, XCircle, PlayCircle, Clock,
   Terminal, Database, Copy, Check, RefreshCw, FileSpreadsheet, Download, Table, Code2
@@ -13,6 +14,7 @@ import * as XLSX from 'xlsx'
 export function JobDetailPage() {
   const { id } = useParams<{ id: string }>()
   const [job, setJob] = useState<ScrapingJob | null>(null)
+  const [config, setConfig] = useState<ScrapingConfig | null>(null)
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
   const [activeTab, setActiveTab] = useState<'results' | 'logs'>('results')
@@ -24,6 +26,9 @@ export function JobDetailPage() {
     try {
       const res = await jobsApi.getById(id)
       setJob(res)
+      if (res?.config_id) {
+        configsApi.getById(res.config_id).then((cfg) => setConfig(cfg)).catch(() => {})
+      }
     } catch {
       if (!silent) toast.error('Gagal mengambil detail job')
     } finally {
@@ -106,7 +111,8 @@ export function JobDetailPage() {
       const worksheet = XLSX.utils.json_to_sheet(flattenedRows)
       const workbook = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Results')
-      const fileName = `job_${id?.substring(0, 8)}_${new Date().toISOString().slice(0, 10)}.xlsx`
+      const nameSlug = config?.name ? config.name.replace(/[^a-zA-Z0-9_-]/g, '_') : `job_${id?.substring(0, 8)}`
+      const fileName = `${nameSlug}_${new Date().toISOString().slice(0, 10)}.xlsx`
       XLSX.writeFile(workbook, fileName)
       toast.success(`Berhasil mengunduh ${fileName}`)
     } catch {
@@ -123,7 +129,8 @@ export function JobDetailPage() {
       const worksheet = XLSX.utils.json_to_sheet(flattenedRows)
       const workbook = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Results')
-      const fileName = `job_${id?.substring(0, 8)}_${new Date().toISOString().slice(0, 10)}.csv`
+      const nameSlug = config?.name ? config.name.replace(/[^a-zA-Z0-9_-]/g, '_') : `job_${id?.substring(0, 8)}`
+      const fileName = `${nameSlug}_${new Date().toISOString().slice(0, 10)}.csv`
       XLSX.writeFile(workbook, fileName, { bookType: 'csv' })
       toast.success(`Berhasil mengunduh ${fileName}`)
     } catch {
@@ -147,7 +154,7 @@ export function JobDetailPage() {
   if (loading) {
     return (
       <div>
-        <Header title="Detail Execution Job" />
+        <Header title="Detail Hasil Eksekusi Job" />
         <div className="p-8 max-w-6xl mx-auto space-y-4">
           <div className="h-48 skeleton" />
         </div>
@@ -158,7 +165,7 @@ export function JobDetailPage() {
   if (!job) {
     return (
       <div>
-        <Header title="Detail Execution Job" />
+        <Header title="Detail Hasil Eksekusi Job" />
         <div className="p-8 text-center text-gray-400">Job tidak ditemukan.</div>
       </div>
     )
@@ -166,7 +173,10 @@ export function JobDetailPage() {
 
   return (
     <div>
-      <Header title={`Job Execution`} subtitle={`ID: ${job.id}`} />
+      <Header
+        title={config?.name ? `Hasil Eksekusi: ${config.name}` : `Hasil Eksekusi Job`}
+        subtitle={`Job ID: ${job.id}`}
+      />
 
       <div className="p-8 space-y-6 max-w-6xl mx-auto">
         <Link to="/jobs" className="btn-ghost btn-sm text-gray-400 inline-flex items-center gap-2">
@@ -178,32 +188,42 @@ export function JobDetailPage() {
         <div className="card p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface-850 border-surface-700">
           <div className="space-y-1">
             <div className="flex items-center gap-3">
-              <span className="font-mono text-base font-bold text-white">Job {job.id.substring(0, 13)}...</span>
+              <span className="text-base font-bold text-white">
+                {config?.name || `Job ${job.id.substring(0, 8)}...`}
+              </span>
               {getStatusBadge(job.status)}
             </div>
-            <p className="text-xs text-gray-400">Config ID: <span className="font-mono text-brand-300">{job.config_id}</span></p>
+            <p className="text-xs text-gray-400">
+              Konfigurasi: <span className="font-semibold text-brand-300">{config?.name || job.config_id}</span>
+              <span className="text-gray-500 font-mono ml-2">(Job ID: {job.id})</span>
+            </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <button onClick={() => fetchJobDetail(false)} className="btn-secondary text-xs">
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Refresh</span>
-            </button>
+          <div className="flex flex-col md:items-end gap-2.5">
+            {/* Result / Refresh Button (Alone on top) */}
+            <div className="flex justify-end w-full">
+              <button onClick={() => fetchJobDetail(false)} className="btn-secondary text-xs flex items-center gap-1.5 px-3 py-1.5 whitespace-nowrap">
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Refresh Result</span>
+              </button>
+            </div>
+
+            {/* 1 Single Row for 3 Download Buttons */}
             {flattenedRows.length > 0 && (
-              <>
-                <button onClick={exportExcel} className="btn-primary bg-emerald-600 hover:bg-emerald-500 text-xs">
+              <div className="flex flex-nowrap items-center gap-2 whitespace-nowrap overflow-x-auto">
+                <button onClick={exportExcel} className="btn-primary bg-emerald-800 hover:bg-emerald-600 text-xs flex items-center gap-1.5 px-3 py-1.5 shrink-0">
                   <FileSpreadsheet className="w-3.5 h-3.5" />
                   <span>Download Excel (.xlsx)</span>
                 </button>
-                <button onClick={exportCSV} className="btn-secondary text-xs">
+                <button onClick={exportCSV} className="btn-secondary text-xs flex items-center gap-1.5 px-3 py-1.5 shrink-0">
                   <Download className="w-3.5 h-3.5" />
                   <span>Download CSV</span>
                 </button>
-                <button onClick={copyResults} className="btn-secondary text-xs">
+                <button onClick={copyResults} className="btn-secondary text-xs flex items-center gap-1.5 px-3 py-1.5 shrink-0">
                   {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>JSON</span>
+                  <span>Download JSON</span>
                 </button>
-              </>
+              </div>
             )}
           </div>
         </div>
@@ -326,6 +346,34 @@ export function JobDetailPage() {
                             const val = row[col]
                             const cellStr = typeof val === 'object' ? JSON.stringify(val) : String(val ?? '')
                             const isUrl = cellStr.startsWith('http://') || cellStr.startsWith('https://')
+
+                            if (col === 'extraction_status') {
+                              let badgeStyle = 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                              if (cellStr.includes('headless')) {
+                                badgeStyle = 'bg-blue-500/20 text-blue-300 border-blue-500/30'
+                              } else if (cellStr.includes('fallback') || cellStr.includes('snippet')) {
+                                badgeStyle = 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                              }
+                              return (
+                                <td key={col} className="text-xs max-w-xs">
+                                  <span className={`px-2 py-0.5 rounded text-[11px] font-mono border ${badgeStyle}`}>
+                                    {cellStr}
+                                  </span>
+                                </td>
+                              )
+                            }
+
+                            if (col === 'is_fallback') {
+                              return (
+                                <td key={col} className="text-xs max-w-xs">
+                                  {val ? (
+                                    <span className="text-amber-400 font-mono text-[11px]">Fallback Snippet</span>
+                                  ) : (
+                                    <span className="text-emerald-400 font-mono text-[11px]">Full Text</span>
+                                  )}
+                                </td>
+                              )
+                            }
 
                             return (
                               <td key={col} className="text-xs text-gray-200 max-w-xs truncate">

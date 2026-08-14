@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { authApi } from '../api/auth'
 import { useAuthStore } from '../store/authStore'
-import { Activity, Lock, Mail, User, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react'
+import { Lock, Mail, User, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export function Login() {
@@ -53,16 +53,13 @@ export function Login() {
       <div className="w-full max-w-md card p-8 glass relative z-10 shadow-2xl border border-surface-600">
         {/* Header Logo */}
         <div className="flex flex-col items-center text-center mb-8">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-brand-400 to-teal-600 flex items-center justify-center shadow-lg shadow-brand-900/60 mb-3">
-            <Activity className="w-6 h-6 text-white" />
-          </div>
           <h2 className="text-2xl font-bold text-white tracking-tight">
-            {isRegister ? 'Buat Akun Baru' : 'Login ke Platform'}
+            {isRegister ? 'Buat Akun Baru' : 'Login SiAPA'}
           </h2>
           <p className="text-xs text-gray-400 mt-1">
             {isRegister
               ? 'Daftarkan diri Anda untuk mengelola scraping BPS'
-              : 'Masukkan kredensial Anda untuk mengakses dashboard'}
+              : 'Masukkan kredensial Anda untuk masuk ke sistem'}
           </p>
         </div>
 
@@ -98,7 +95,7 @@ export function Login() {
               <input
                 type="email"
                 required
-                placeholder="user@bps.go.id"
+                placeholder="user@gmail.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="input pl-10"

@@ -11,43 +11,43 @@ import (
 	"github.com/marchelrn/scrapers/pkg/registry"
 )
 
-type GoogleSearchMethod struct{}
+type GoogleNewsMethod struct{}
 
-func NewGoogleSearchMethod() registry.ScrapingMethod {
-	return &GoogleSearchMethod{}
+func NewGoogleNewsMethod() registry.ScrapingMethod {
+	return &GoogleNewsMethod{}
 }
 
-func (m *GoogleSearchMethod) Code() string {
-	return "google_search"
+func (m *GoogleNewsMethod) Code() string {
+	return "google_news"
 }
 
-func (m *GoogleSearchMethod) Name() string {
-	return "Web Search (News)"
+func (m *GoogleNewsMethod) Name() string {
+	return "Google News RSS Search"
 }
 
-func (m *GoogleSearchMethod) Description() string {
-	return "Mencari artikel berita via DuckDuckGo Search (Tanpa Kunci API) dan mengekstrak teks halamannya."
+func (m *GoogleNewsMethod) Description() string {
+	return "Mencari berita via Google News RSS Feed, me-resolve URL penerbit asli, dan mengekstrak teks serta ringkasan berita."
 }
 
-func (m *GoogleSearchMethod) Version() string {
-	return "1.1.0"
+func (m *GoogleNewsMethod) Version() string {
+	return "1.0.0"
 }
 
-func (m *GoogleSearchMethod) ParameterDefinitions() []registry.ParameterDefinition {
+func (m *GoogleNewsMethod) ParameterDefinitions() []registry.ParameterDefinition {
 	return []registry.ParameterDefinition{
 		{
 			Name:        "query",
 			Label:       "Search Query",
 			Type:        "text",
 			Required:    true,
-			Placeholder: "e.g. Pertanian Sulawesi Utara 2026",
+			Placeholder: "e.g. Tanaman Pangan Sulawesi Utara 2026",
 		},
 		{
 			Name:        "domain_filter",
 			Label:       "Domain Filter (Optional)",
 			Type:        "text",
 			Required:    false,
-			Placeholder: "e.g. bps.go.id, antaranews.com",
+			Placeholder: "e.g. antaranews.com, bps.go.id",
 		},
 		{
 			Name:     "max_results",
@@ -61,7 +61,7 @@ func (m *GoogleSearchMethod) ParameterDefinitions() []registry.ParameterDefiniti
 			Label:       "AI Instruction / Prompt",
 			Type:        "textarea",
 			Required:    false,
-			Placeholder: "e.g. Ringkas dan ekstrak hanya data mengenai komoditas Pertanian",
+			Placeholder: "e.g. Ringkas dan saring berita mengenai produksi komoditas pangan",
 			Description: "Gunakan LLM (Gemini) untuk meringkas dan menyaring teks hasil ekstraksi berdasarkan instruksi.",
 		},
 		{
@@ -82,11 +82,11 @@ func (m *GoogleSearchMethod) ParameterDefinitions() []registry.ParameterDefiniti
 	}
 }
 
-func (m *GoogleSearchMethod) AuthenticationCapabilities() []string {
+func (m *GoogleNewsMethod) AuthenticationCapabilities() []string {
 	return []string{"none"}
 }
 
-func (m *GoogleSearchMethod) Validate(params map[string]interface{}) error {
+func (m *GoogleNewsMethod) Validate(params map[string]interface{}) error {
 	query, ok := params["query"]
 	if !ok || query == "" {
 		return errors.New("parameter 'query' is required")
@@ -100,8 +100,8 @@ func (m *GoogleSearchMethod) Validate(params map[string]interface{}) error {
 	return nil
 }
 
-func (m *GoogleSearchMethod) Execute(ctx context.Context, params map[string]interface{}) (*dto.WorkerResult, error) {
-	pythonFile := "google_search_scraper.py"
+func (m *GoogleNewsMethod) Execute(ctx context.Context, params map[string]interface{}) (*dto.WorkerResult, error) {
+	pythonFile := "google_news_scraper.py"
 
 	paramsJSONBytes, err := json.Marshal(params)
 	if err != nil {
@@ -112,9 +112,6 @@ func (m *GoogleSearchMethod) Execute(ctx context.Context, params map[string]inte
 	var output []byte
 	var lastErr error
 
-	// We don't implement retry on the overall Python process for Google Search,
-	// because the Python script itself will handle API retries,
-	// and we want to avoid double-burning Google Search API quota.
 	cmd := exec.CommandContext(ctx, GetPythonExecutable(), GetWorkerScriptPath(), pythonFile, paramsJSON)
 	output, lastErr = cmd.CombinedOutput()
 
@@ -125,7 +122,7 @@ func (m *GoogleSearchMethod) Execute(ctx context.Context, params map[string]inte
 			Method:  m.Code(),
 			Results: []interface{}{},
 			Metadata: dto.WorkerMetadata{
-				Source:    "google_search",
+				Source:    "google_news",
 				FetchedAt: nowISO,
 				ItemCount: 0,
 			},
@@ -136,7 +133,6 @@ func (m *GoogleSearchMethod) Execute(ctx context.Context, params map[string]inte
 		}, nil
 	}
 
-	// 5MB Max Output limit
 	if len(output) > 5*1024*1024 {
 		nowISO := time.Now().UTC().Format(time.RFC3339)
 		return &dto.WorkerResult{
@@ -144,7 +140,7 @@ func (m *GoogleSearchMethod) Execute(ctx context.Context, params map[string]inte
 			Method:  m.Code(),
 			Results: []interface{}{},
 			Metadata: dto.WorkerMetadata{
-				Source:    "google_search",
+				Source:    "google_news",
 				FetchedAt: nowISO,
 				ItemCount: 0,
 			},
@@ -170,7 +166,7 @@ func (m *GoogleSearchMethod) Execute(ctx context.Context, params map[string]inte
 			Method:  m.Code(),
 			Results: []interface{}{},
 			Metadata: dto.WorkerMetadata{
-				Source:    "google_search",
+				Source:    "google_news",
 				FetchedAt: nowISO,
 				ItemCount: 0,
 			},

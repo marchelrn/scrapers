@@ -13,6 +13,7 @@ func Run() {
 	// Register scraping methods
 	registry.Get().Register(methods.NewTargetURLMethod())
 	registry.Get().Register(methods.NewGoogleSearchMethod())
+	registry.Get().Register(methods.NewGoogleNewsMethod())
 
 	server.Run()
 }

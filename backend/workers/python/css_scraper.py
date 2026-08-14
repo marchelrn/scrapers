@@ -5,50 +5,30 @@ from playwright.sync_api import sync_playwright
 def clean_selector(selector: str) -> str:
     """
     Membersihkan selector raksasa dari Visual Selector UI.
-    Abaikan class Tailwind layout/spacing/responsive dan ambil tag/class bermakna.
+    Hapus class internal bps-picker, saring class dengan titik dua tak ter-escape (seperti .md:ml-4),
+    dan hapus class utility Tailwind agar selector CSS valid & presisi.
     """
     if not selector:
         return "body"
 
-    parts = [p.strip() for p in selector.split('>')]
-    clean_parts = []
+    sub_selectors = [s.strip() for s in selector.split(',') if s.strip()]
+    cleaned_subs = []
 
-    # Daftar kata kunci class Tailwind/Next.js yang HARUS dibuang karena rawan break
-    ignored_keywords = [
-        'flex', 'grid', 'col', 'row', 'items', 'justify', 'center', 'relative', 'absolute',
-        'portrait', 'w-', 'h-', 'max-', 'min-', 'mx-', 'my-', 'px-', 'py-', 'pt-', 'pb-',
-        'leading-', 'text-', 'gap-', 'z-', 'font-', 'bg-', 'st-', '__'
-    ]
+    for sub in sub_selectors:
+        # Hapus class picker internal jika ada
+        sub = re.sub(r'\.bps-picker-[a-zA-Z0-9_-]+', '', sub)
+        # Hapus class dengan colon tak ter-escape seperti .md:ml-4 atau .hover:bg-red
+        sub = re.sub(r'\.([a-zA-Z0-9_-]+):([a-zA-Z0-9_-]+)', '', sub)
+        # Hapus class utility Tailwind umum (mt-*, rounded-*, p-*, ml-*, dsb)
+        sub = re.sub(r'\.(mt|mb|ml|mr|p|pt|pb|pl|pr|w|h|mx|my|px|py|rounded|text|bg|flex|grid|border|items|justify|gap|z|font)-[a-zA-Z0-9_-]+', '', sub)
+        
+        # Bersihkan spasi / operator berlebih
+        sub = re.sub(r'\s+>\s+', ' > ', sub).strip()
+        if sub:
+            cleaned_subs.append(sub)
 
-    for part in parts:
-        match = re.match(r'^([a-zA-Z0-9_-]+)', part)
-        if not match:
-            continue
-
-        tag_name = match.group(1)
-
-        # Jaga ID jika ada
-        id_match = re.search(r'#([a-zA-Z0-9_-]+)', part)
-        if id_match:
-            clean_parts.append(f"{tag_name}#{id_match.group(1)}")
-            continue
-
-        # Filter class, buang class utility Tailwind
-        classes = re.findall(r'\.([a-zA-Z0-9_-]+)', part)
-        valid_classes = [
-            cls for cls in classes
-            if not any(cls.startswith(kw) or f":{kw}" in cls for kw in ignored_keywords)
-        ]
-
-        if valid_classes:
-            clean_parts.append(f"{tag_name}.{valid_classes[0]}")
-        else:
-            clean_parts.append(tag_name)
-
-    # Ambil elemen paling spesifik di ujung selector
-    # Jika tag paling akhir adalah elemen teks utama (h1-h6, p, span, a), gunakan tag tersebut
-    last_tag = clean_parts[-1]
-    return last_tag if last_tag else "body"
+    result = ", ".join(cleaned_subs)
+    return result if result else "body"
 
 
 def scrape(config_params):

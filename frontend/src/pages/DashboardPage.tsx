@@ -63,7 +63,7 @@ export function DashboardPage() {
   return (
       <div>
         <Header
-            title="Dashboard Scraping BPS"
+            title="Dashboard Scraping"
         />
 
         <div className="p-8 space-y-8 max-w-7xl mx-auto">

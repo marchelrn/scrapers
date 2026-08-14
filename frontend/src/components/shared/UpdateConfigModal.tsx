@@ -182,7 +182,6 @@ export function UpdateConfigModal({
         description: description || undefined,
         method_code: methodCode,
         status,
-        schedule_enabled: true, // Auto-enable to ensure scheduler can trigger it
         parameters: paramsPayload,
       })
 
@@ -240,7 +239,7 @@ export function UpdateConfigModal({
 
             <div className="grid grid-cols-2 gap-4">
               <div className="form-group">
-                <label className="label">Metode Scraping (Dinamis / GET methods)</label>
+                <label className="label">Metode Scraping</label>
                 <select
                   value={methodCode}
                   onChange={(e) => setMethodCode(e.target.value)}
@@ -248,13 +247,13 @@ export function UpdateConfigModal({
                 >
                   {methods.length === 0 ? (
                     <>
-                      <option value="target_url">Target URL HTML/CSS Scraping</option>
-                      <option value="google_search">Web Search News (DuckDuckGo)</option>
+                      <option value="target_url">Target URL</option>
+                      <option value="google_search">Web Search (News)</option>
                     </>
                   ) : (
                     methods.map((m) => (
                       <option key={m.code} value={m.code}>
-                        {m.name} ({m.code})
+                        {m.name}
                       </option>
                     ))
                   )}
@@ -294,7 +293,7 @@ export function UpdateConfigModal({
                           : 'text-gray-400 hover:text-gray-200'
                       }`}
                     >
-                      1. Low Code (Keyword)
+                      1. Low Code
                     </button>
                     <button
                       type="button"
@@ -308,7 +307,7 @@ export function UpdateConfigModal({
                           : 'text-gray-400 hover:text-gray-200'
                       }`}
                     >
-                      2. Visual Selector (Point & Click)
+                      2. Visual Selector
                     </button>
                   </div>
                 </div>
@@ -373,7 +372,19 @@ export function UpdateConfigModal({
 
                 {(() => {
                   const foundMethod = methods.find((m) => m.code === methodCode)
-                  const paramsList = foundMethod?.parameters
+                  let paramsList = foundMethod?.parameters
+
+                  if (!paramsList || paramsList.length === 0) {
+                    if (methodCode === 'google_search' || methodCode === 'google_news') {
+                      paramsList = [
+                        { name: 'query', label: 'Search Query', type: 'text', required: true, placeholder: 'e.g. Pertanian Sulawesi Utara 2026' },
+                        { name: 'domain_filter', label: 'Domain Filter (Optional)', type: 'text', required: false, placeholder: 'e.g. bps.go.id, antaranews.com' },
+                        { name: 'max_results', label: 'Max Results', type: 'number', required: false, default: 10 },
+                        { name: 'ai_instruction', label: 'AI Instruction / Prompt', type: 'textarea', required: false, placeholder: 'e.g. Ringkas dan ekstrak hanya data mengenai komoditas Pertanian' },
+                        { name: 'deduplicate', label: 'Hindari Duplikasi (Skip URL Lama)', type: 'boolean', required: false, default: true }
+                      ] as any
+                    }
+                  }
 
                   if (!paramsList || paramsList.length === 0) {
                     return (
@@ -389,48 +400,73 @@ export function UpdateConfigModal({
                             className="input"
                           />
                         </div>
-                        <div className="form-group">
-                          <label className="label">Domain Filter</label>
-                          <input
-                            type="text"
-                            value={dynamicParamValues.domain_filter || ''}
-                            onChange={(e) =>
-                              setDynamicParamValues((prev) => ({ ...prev, domain_filter: e.target.value }))
-                            }
-                            className="input"
-                          />
-                        </div>
                       </div>
                     )
                   }
 
                   return (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {paramsList.map((param, i) => {
+                      {paramsList.map((param: any, i: number) => {
                         const pName = param.Name || param.name || `param_${i}`
+                        if (pName === 'auth_type' || pName === 'secret_reference') return null
                         const pLabel = param.Label || param.label || pName
                         const pType = (param.Type || param.type || 'text').toLowerCase()
                         const pReq = param.Required ?? param.required ?? false
                         const pPlaceholder = param.Placeholder || param.placeholder || ''
+                        const pDesc = param.Description || param.description || ''
+
+                        const isTextarea = pType === 'textarea' || pName === 'ai_instruction'
+                        const isBoolean = pType === 'boolean' || pName === 'deduplicate'
 
                         return (
-                          <div key={pName} className="form-group">
-                            <label className="label">
-                              {pLabel} {pReq && <span className="text-red-400">*</span>}
+                          <div key={pName} className={`form-group ${isTextarea ? 'col-span-1 md:col-span-2' : ''}`}>
+                            <label className="label flex items-center justify-between">
+                              <span>{pLabel} {pReq && <span className="text-red-400">*</span>}</span>
                             </label>
-                            <input
-                              type={pType === 'number' ? 'number' : 'text'}
-                              required={pReq}
-                              placeholder={pPlaceholder}
-                              value={dynamicParamValues[pName] ?? ''}
-                              onChange={(e) =>
-                                setDynamicParamValues((prev) => ({
-                                  ...prev,
-                                  [pName]: pType === 'number' ? Number(e.target.value) : e.target.value,
-                                }))
-                              }
-                              className="input"
-                            />
+                            {isTextarea ? (
+                              <textarea
+                                rows={3}
+                                required={pReq}
+                                placeholder={pPlaceholder}
+                                value={dynamicParamValues[pName] ?? ''}
+                                onChange={(e) =>
+                                  setDynamicParamValues((prev) => ({
+                                    ...prev,
+                                    [pName]: e.target.value,
+                                  }))
+                                }
+                                className="input text-xs font-sans"
+                              />
+                            ) : isBoolean ? (
+                              <select
+                                value={String(dynamicParamValues[pName] ?? param.default ?? true)}
+                                onChange={(e) =>
+                                  setDynamicParamValues((prev) => ({
+                                    ...prev,
+                                    [pName]: e.target.value === 'true',
+                                  }))
+                                }
+                                className="input"
+                              >
+                                <option value="true">Aktif (Ya - Skip URL duplikat)</option>
+                                <option value="false">Nonaktif (Ambil ulang URL yang sama)</option>
+                              </select>
+                            ) : (
+                              <input
+                                type={pType === 'number' ? 'number' : 'text'}
+                                required={pReq}
+                                placeholder={pPlaceholder}
+                                value={dynamicParamValues[pName] ?? ''}
+                                onChange={(e) =>
+                                  setDynamicParamValues((prev) => ({
+                                    ...prev,
+                                    [pName]: pType === 'number' ? Number(e.target.value) : e.target.value,
+                                  }))
+                                }
+                                className="input"
+                              />
+                            )}
+                            {pDesc && <p className="text-[11px] text-gray-400 mt-1">{pDesc}</p>}
                           </div>
                         )
                       })}
@@ -492,7 +528,7 @@ export function UpdateConfigModal({
               disabled={submitting}
               className="btn-primary w-full justify-center py-2.5 text-xs font-semibold"
             >
-              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Simpan Konfigurasi'}
+              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Perbarui Konfigurasi'}
             </button>
           </form>
         </div>

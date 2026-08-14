@@ -13,6 +13,7 @@ SCRAPER_MODULES = {
     "headless_scraper.py": "headless_scraper",
     "keyword_scraper.py": "keyword_scraper",
     "google_search_scraper.py": "google_search_scraper",
+    "google_news_scraper.py": "google_news_scraper",
 }
 
 def execute_job(python_file, config_params):
@@ -36,7 +37,7 @@ def execute_job(python_file, config_params):
         # Call the scrape function
         results = scraper_module.scrape(config_params)
         
-        method_code = "google_search" if python_file == "google_search_scraper.py" else "target_url"
+        method_code = "google_search" if python_file in ["google_search_scraper.py", "google_news_scraper.py"] else "target_url"
         
         # Output results as JSON matching the contract
         print(json.dumps({
@@ -56,7 +57,7 @@ def execute_job(python_file, config_params):
         if "_resolved_secret_value" in config_params and config_params["_resolved_secret_value"]:
             error_msg = error_msg.replace(config_params["_resolved_secret_value"], "***REDACTED***")
             
-        method_code = "google_search" if python_file == "google_search_scraper.py" else "target_url"
+        method_code = "google_search" if python_file in ["google_search_scraper.py", "google_news_scraper.py"] else "target_url"
         print(json.dumps({
             "status": "failed",
             "method": method_code,

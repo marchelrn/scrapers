@@ -1,4 +1,5 @@
 import ipaddress
+import os
 import socket
 from urllib.parse import urlparse
 
@@ -33,13 +34,16 @@ def validate_url(url):
     if host.lower() in BLOCKED_HOSTS:
         raise ValueError(f"URL host is blocked: {host}")
 
+    allow_private = os.environ.get("ALLOW_PRIVATE_IP_RESOLUTION") == "true"
+
     try:
         ip = ipaddress.ip_address(host)
-        for network in PRIVATE_NETWORKS:
-            if ip in network:
+        if not allow_private:
+            for network in PRIVATE_NETWORKS:
+                if ip in network:
+                    raise ValueError("URL points to a private/reserved IP address")
+            if ip.is_loopback or ip.is_link_local or ip.is_reserved:
                 raise ValueError("URL points to a private/reserved IP address")
-        if ip.is_loopback or ip.is_link_local or ip.is_reserved:
-            raise ValueError("URL points to a private/reserved IP address")
     except ValueError as e:
         if "private" in str(e).lower() or "blocked" in str(e).lower() or "reserved" in str(e).lower():
             raise
@@ -49,10 +53,11 @@ def validate_url(url):
             for family, type_, proto, canonname, sockaddr in resolved:
                 addr = sockaddr[0]
                 ip = ipaddress.ip_address(addr)
-                for network in PRIVATE_NETWORKS:
-                    if ip in network:
-                        raise ValueError(f"URL hostname {host} resolves to private IP {addr}")
-                if ip.is_loopback or ip.is_link_local or ip.is_reserved:
-                    raise ValueError(f"URL hostname {host} resolves to reserved IP {addr}")
+                if not allow_private:
+                    for network in PRIVATE_NETWORKS:
+                        if ip in network:
+                            raise ValueError(f"URL hostname {host} resolves to private IP {addr}")
+                    if ip.is_loopback or ip.is_link_local or ip.is_reserved:
+                        raise ValueError(f"URL hostname {host} resolves to reserved IP {addr}")
         except socket.gaierror:
             pass  # Cannot resolve, let the request fail naturally

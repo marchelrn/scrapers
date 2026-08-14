@@ -309,6 +309,48 @@ func (s *ScrapingJobService) executeJobAsync(jobID string, config *models.Scrapi
 		params[p.ParameterName] = val
 	}
 
+	// Collect previously scraped URLs for deduplication across executions of the same config
+	dedupSetting, hasDedup := params["deduplicate"]
+	isDedupActive := !hasDedup || dedupSetting == true || dedupSetting == "true"
+	if isDedupActive {
+		previousJobs, err := s.jobRepo.GetAll(&config.ID, "", models.UserRoleAdmin, 50, 0)
+		if err == nil {
+			var seenURLs []string
+			urlMap := make(map[string]bool)
+
+			for _, prevJob := range previousJobs {
+				if prevJob.ID == jobID {
+					continue
+				}
+				results, err := s.resultRepo.GetByJobID(prevJob.ID)
+				if err == nil {
+					for _, res := range results {
+						var parsed struct {
+							Results []struct {
+								URL  string `json:"url"`
+								Link string `json:"link"`
+							} `json:"results"`
+						}
+						if jsonErr := json.Unmarshal(res.ResultJSON, &parsed); jsonErr == nil {
+							for _, item := range parsed.Results {
+								u := item.URL
+								if u == "" {
+									u = item.Link
+								}
+								u = strings.TrimSpace(u)
+								if u != "" && !urlMap[u] {
+									urlMap[u] = true
+									seenURLs = append(seenURLs, u)
+								}
+							}
+						}
+					}
+				}
+			}
+			params["previously_scraped_urls"] = seenURLs
+		}
+	}
+
 	// Resolve secret_reference if present
 	if secretID, ok := params["secret_reference"]; ok && secretID != "" {
 		if sidStr, isStr := secretID.(string); isStr {

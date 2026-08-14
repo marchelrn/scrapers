@@ -4,7 +4,7 @@ import { configsApi } from '../api/configs'
 import { methodsApi } from '../api/methods'
 import { secretsApi } from '../api/secrets'
 import { schedulesApi } from '../api/schedules'
-import type { ScrapingConfig, Method, Secret } from '../types'
+import type { ScrapingConfig, Method, Secret, Schedule } from '../types'
 import { VisualSelectorModal } from '../components/shared/VisualSelectorModal'
 import { LowCodeSchedulePicker } from '../components/shared/LowCodeSchedulePicker'
 import { UpdateConfigModal } from '../components/shared/UpdateConfigModal'
@@ -20,6 +20,7 @@ export function ConfigsPage() {
   const [configs, setConfigs] = useState<ScrapingConfig[]>([])
   const [methods, setMethods] = useState<Method[]>([])
   const [secrets, setSecrets] = useState<Secret[]>([])
+  const [schedules, setSchedules] = useState<Schedule[]>([])
   const [loading, setLoading] = useState(true)
 
   // Modal State
@@ -35,7 +36,6 @@ export function ConfigsPage() {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [methodCode, setMethodCode] = useState('target_url')
-  const [status, setStatus] = useState<'active' | 'inactive'>('active')
 
   // Auth Vault Integration State
   const [authType, setAuthType] = useState('none')
@@ -61,14 +61,16 @@ export function ConfigsPage() {
 
   const fetchInitialData = async () => {
     try {
-      const [cfgs, meths, secs] = await Promise.all([
+      const [cfgs, meths, secs, schs] = await Promise.all([
         configsApi.getAll(),
         methodsApi.getAll().catch(() => []),
         secretsApi.getAll().catch(() => []),
+        schedulesApi.getAll().catch(() => []),
       ])
       setConfigs(cfgs || [])
       setMethods(meths || [])
       setSecrets(secs || [])
+      setSchedules(schs || [])
     } catch {
       toast.error('Gagal memuat data awal konfigurasi')
     } finally {
@@ -150,8 +152,7 @@ export function ConfigsPage() {
         name,
         description: description || undefined,
         method_code: methodCode,
-        status,
-        schedule_enabled: true, // Auto-enable to ensure scheduler can trigger it
+        schedule_enabled: false,
         parameters: paramsPayload,
       })
 
@@ -189,6 +190,14 @@ export function ConfigsPage() {
 
   const handleOpenScheduleModal = (config: ScrapingConfig) => {
     setSelectedConfigForSchedule(config)
+    const existingSchedule = schedules.find((s) => s.config_id === config.id)
+    if (existingSchedule) {
+      setCronExpression(existingSchedule.cron_expression)
+      setScheduleTimezone(existingSchedule.timezone || 'Asia/Makassar')
+    } else {
+      setCronExpression('0 0 * * *')
+      setScheduleTimezone('Asia/Makassar')
+    }
     setShowScheduleModal(true)
   }
 
@@ -202,12 +211,21 @@ export function ConfigsPage() {
     if (!selectedConfigForSchedule) return
     setSubmitting(true)
     try {
-      await schedulesApi.create({
-        config_id: selectedConfigForSchedule.id,
-        cron_expression: cronExpression,
-        timezone: scheduleTimezone,
-        enabled: true,
-      })
+      const existingSchedule = schedules.find((s) => s.config_id === selectedConfigForSchedule.id)
+      if (existingSchedule) {
+        await schedulesApi.update(existingSchedule.id, {
+          cron_expression: cronExpression,
+          timezone: scheduleTimezone,
+          enabled: true,
+        })
+      } else {
+        await schedulesApi.create({
+          config_id: selectedConfigForSchedule.id,
+          cron_expression: cronExpression,
+          timezone: scheduleTimezone,
+          enabled: true,
+        })
+      }
       toast.success('Jadwal scraping otomatis berhasil disimpan!')
       setShowScheduleModal(false)
       fetchInitialData()
@@ -222,6 +240,7 @@ export function ConfigsPage() {
     const found = methods.find((m) => m.code === code)
     if (found) return found.name
     if (code === 'google_search') return 'Web Search (News)'
+    if (code === 'google_news') return 'Google News RSS Search'
     if (code === 'target_url') return 'Target URL Scraping'
     return code
   }
@@ -264,8 +283,8 @@ export function ConfigsPage() {
                     <th>Metode Blueprint</th>
                     <th>Status</th>
                     <th>Scheduler</th>
-                    <th>Dibuat</th>
-                    <th className="text-right">Aksi & Eksekusi</th>
+                    {/*<th>Dibuat</th>*/}
+                    <th className={ "text-center" }>Aksi & Eksekusi</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -276,72 +295,76 @@ export function ConfigsPage() {
                       </td>
                     </tr>
                   ) : (
-                    configs.map((c) => (
-                      <tr key={c.id} className="hover:bg-surface-800/40">
-                        <td>
-                          <div>
-                            <Link to={`/configs/${c.id}`} className="text-sm font-semibold text-white hover:text-brand-300">
-                              {c.name}
-                            </Link>
-                            {c.description && <p className="text-xs text-gray-400 truncate max-w-xs">{c.description}</p>}
-                          </div>
-                        </td>
-                        <td>
-                          <span className="badge-neutral font-mono text-[11px] px-2 py-0.5 rounded bg-surface-800 text-teal-300 border border-surface-700">
-                            {getMethodNameLabel(c.method_code)}
-                          </span>
-                        </td>
-                        <td>
-                          {c.status === 'active' ? (
-                            <span className="badge-success"><CheckCircle className="w-3 h-3" /> Active</span>
-                          ) : (
-                            <span className="badge-neutral"><XCircle className="w-3 h-3" /> Inactive</span>
-                          )}
-                        </td>
-                        <td>
-                          <button
-                            onClick={() => handleOpenScheduleModal(c)}
-                            className={`text-xs inline-flex items-center gap-1.5 px-2 py-1 rounded border transition-colors ${
-                              c.schedule_enabled
-                                ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20'
-                                : 'text-gray-400 border-surface-700 bg-surface-800 hover:text-gray-200'
-                            }`}
-                          >
-                            <span>{c.schedule_enabled ? 'Aktif' : <Calendar className="w-4 h-4" /> }</span>
-                          </button>
-                        </td>
-                        <td className="text-xs text-gray-400">
-                          {new Date(c.created_at).toLocaleDateString('id-ID')}
-                        </td>
-                        <td>
-                          <div className="flex items-center justify-end gap-2">
+                    configs.map((c) => {
+                      const hasSchedule = schedules.some((s) => s.config_id === c.id && s.enabled)
+                      return (
+                        <tr key={c.id} className="hover:bg-surface-800/40">
+                          <td>
+                            <div>
+                              <Link to={`/configs/${c.id}`} className="text-sm font-semibold text-white hover:text-brand-300">
+                                {c.name}
+                              </Link>
+                              {c.description && <p className="text-xs text-gray-400 truncate max-w-xs">{c.description}</p>}
+                            </div>
+                          </td>
+                          <td>
+                            <span className="badge-neutral font-mono text-[11px] px-2 py-0.5 rounded bg-surface-800 text-teal-300 border border-surface-700">
+                              {getMethodNameLabel(c.method_code)}
+                            </span>
+                          </td>
+                          <td>
+                            {c.status === 'active' ? (
+                              <span className="badge-success"><CheckCircle className="w-3 h-3" /> Active</span>
+                            ) : (
+                              <span className="badge-neutral"><XCircle className="w-3 h-3" /> Inactive</span>
+                            )}
+                          </td>
+                          <td>
                             <button
-                              onClick={() => handleRunJob(c.id)}
-                              className="btn-primary btn-sm bg-brand-600 hover:bg-brand-500"
-                              title="Jalankan Job Pintas (Run Shortcut)"
+                              onClick={() => handleOpenScheduleModal(c)}
+                              title={hasSchedule ? 'Edit / Lihat Schedule Aktif' : 'Atur Jadwal Scraping Otomatis'}
+                              className={`text-xs inline-flex items-center gap-1.5 px-2 py-1 rounded border transition-colors ${
+                                hasSchedule
+                                  ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20'
+                                  : 'text-gray-400 border-surface-700 bg-surface-800 hover:text-gray-200'
+                              }`}
                             >
-                              <Play className="w-3.5 h-3.5 fill-current" />
-                              <span>Run</span>
+                              <span>{hasSchedule ? 'Aktif' : <Calendar className="w-6 h-4" />}</span>
                             </button>
-                            <button
-                              onClick={() => handleOpenUpdateModal(c)}
-                              className="btn-secondary btn-sm text-brand-300 border-brand-500/40 hover:bg-brand-500/10 flex items-center gap-1"
-                              title="Update / Edit Konfigurasi"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                              <span>Edit</span>
-                            </button>
-                            <button
-                              onClick={() => handleDelete(c.id)}
-                              className="btn-danger btn-sm"
-                              title="Hapus Config"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
+                          </td>
+                          {/*<td className="text-xs text-gray-400">*/}
+                          {/*  {new Date(c.created_at).toLocaleDateString('id-ID')}*/}
+                          {/*</td>*/}
+                          <td>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleRunJob(c.id)}
+                                className="btn-primary btn-sm bg-brand-600 hover:bg-brand-500"
+                                title="Jalankan Job"
+                              >
+                                <Play className="w-3.5 h-3.5 fill-current" />
+                                <span>Run</span>
+                              </button>
+                              <button
+                                onClick={() => handleOpenUpdateModal(c)}
+                                className="btn-secondary btn-sm text-brand-300 border-brand-500/40 hover:bg-brand-500/10 flex items-center gap-1"
+                                title="Update / Edit Konfigurasi"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                                <span>Edit</span>
+                              </button>
+                              <button
+                                onClick={() => handleDelete(c.id)}
+                                className="btn-danger btn-sm"
+                                title="Hapus Config"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })
                   )}
                 </tbody>
               </table>
@@ -413,18 +436,6 @@ export function ConfigsPage() {
                     )}
                   </select>
                 </div>
-
-                <div className="form-group">
-                  <label className="label">Status</label>
-                  <select
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value as 'active' | 'inactive')}
-                    className="input"
-                  >
-                    <option value="active">active</option>
-                    <option value="inactive">inactive</option>
-                  </select>
-                </div>
               </div>
 
               {/* Special UX Skenario B: Target URL */}
@@ -447,7 +458,7 @@ export function ConfigsPage() {
                             : 'text-gray-400 hover:text-gray-200'
                         }`}
                       >
-                        1. Low Code
+                        1. Keywords
                       </button>
                       <button
                         type="button"
@@ -489,6 +500,9 @@ export function ConfigsPage() {
                         onChange={(e) => setKeyword(e.target.value)}
                         className="input"
                       />
+                      <p className="text-[11px] text-gray-400 mt-1">
+                        Backend otomatis mengekstrak paragraf & tabel yang memuat kata kunci ini.
+                      </p>
                     </div>
                   ) : (
                     <div className="form-group">
@@ -523,7 +537,19 @@ export function ConfigsPage() {
 
                   {(() => {
                     const foundMethod = methods.find((m) => m.code === methodCode)
-                    const paramsList = foundMethod?.parameters
+                    let paramsList = foundMethod?.parameters
+
+                    if (!paramsList || paramsList.length === 0) {
+                      if (methodCode === 'google_search' || methodCode === 'google_news') {
+                        paramsList = [
+                          { name: 'query', label: 'Search Query', type: 'text', required: true, placeholder: 'e.g. Pertanian Sulawesi Utara 2026' },
+                          { name: 'domain_filter', label: 'Domain Filter (Optional)', type: 'text', required: false, placeholder: 'e.g. bps.go.id, antaranews.com' },
+                          { name: 'max_results', label: 'Max Results', type: 'number', required: false, default: 10 },
+                          { name: 'ai_instruction', label: 'AI Instruction / Prompt', type: 'textarea', required: false, placeholder: 'e.g. Ringkas dan ekstrak hanya data mengenai komoditas Pertanian' },
+                          { name: 'deduplicate', label: 'Hindari Duplikasi (Skip URL Lama)', type: 'boolean', required: false, default: true }
+                        ] as any
+                      }
+                    }
 
                     if (!paramsList || paramsList.length === 0) {
                       return (
@@ -539,48 +565,73 @@ export function ConfigsPage() {
                               className="input"
                             />
                           </div>
-                          <div className="form-group">
-                            <label className="label">Domain Filter</label>
-                            <input
-                              type="text"
-                              value={dynamicParamValues.domain_filter || ''}
-                              onChange={(e) =>
-                                setDynamicParamValues((prev) => ({ ...prev, domain_filter: e.target.value }))
-                              }
-                              className="input"
-                            />
-                          </div>
                         </div>
                       )
                     }
 
                     return (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {paramsList.map((param, i) => {
+                        {paramsList.map((param: any, i: number) => {
                           const pName = param.Name || param.name || `param_${i}`
+                          if (pName === 'auth_type' || pName === 'secret_reference') return null
                           const pLabel = param.Label || param.label || pName
                           const pType = (param.Type || param.type || 'text').toLowerCase()
                           const pReq = param.Required ?? param.required ?? false
                           const pPlaceholder = param.Placeholder || param.placeholder || ''
+                          const pDesc = param.Description || param.description || ''
+
+                          const isTextarea = pType === 'textarea' || pName === 'ai_instruction'
+                          const isBoolean = pType === 'boolean' || pName === 'deduplicate'
 
                           return (
-                            <div key={pName} className="form-group">
-                              <label className="label">
-                                {pLabel} {pReq && <span className="text-red-400">*</span>}
+                            <div key={pName} className={`form-group ${isTextarea ? 'col-span-1 md:col-span-2' : ''}`}>
+                              <label className="label flex items-center justify-between">
+                                <span>{pLabel} {pReq && <span className="text-red-400">*</span>}</span>
                               </label>
-                              <input
-                                type={pType === 'number' ? 'number' : 'text'}
-                                required={pReq}
-                                placeholder={pPlaceholder}
-                                value={dynamicParamValues[pName] ?? ''}
-                                onChange={(e) =>
-                                  setDynamicParamValues((prev) => ({
-                                    ...prev,
-                                    [pName]: pType === 'number' ? Number(e.target.value) : e.target.value,
-                                  }))
-                                }
-                                className="input"
-                              />
+                              {isTextarea ? (
+                                <textarea
+                                  rows={3}
+                                  required={pReq}
+                                  placeholder={pPlaceholder}
+                                  value={dynamicParamValues[pName] ?? ''}
+                                  onChange={(e) =>
+                                    setDynamicParamValues((prev) => ({
+                                      ...prev,
+                                      [pName]: e.target.value,
+                                    }))
+                                  }
+                                  className="input text-xs font-sans"
+                                />
+                              ) : isBoolean ? (
+                                <select
+                                  value={String(dynamicParamValues[pName] ?? param.default ?? true)}
+                                  onChange={(e) =>
+                                    setDynamicParamValues((prev) => ({
+                                      ...prev,
+                                      [pName]: e.target.value === 'true',
+                                    }))
+                                  }
+                                  className="input"
+                                >
+                                  <option value="true">Aktif (Ya - Skip URL duplikat)</option>
+                                  <option value="false">Nonaktif (Ambil ulang URL yang sama)</option>
+                                </select>
+                              ) : (
+                                <input
+                                  type={pType === 'number' ? 'number' : 'text'}
+                                  required={pReq}
+                                  placeholder={pPlaceholder}
+                                  value={dynamicParamValues[pName] ?? ''}
+                                  onChange={(e) =>
+                                    setDynamicParamValues((prev) => ({
+                                      ...prev,
+                                      [pName]: pType === 'number' ? Number(e.target.value) : e.target.value,
+                                    }))
+                                  }
+                                  className="input"
+                                />
+                              )}
+                              {pDesc && <p className="text-[11px] text-gray-400 mt-1">{pDesc}</p>}
                             </div>
                           )
                         })}

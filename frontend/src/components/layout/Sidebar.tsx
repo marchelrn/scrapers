@@ -31,7 +31,7 @@ export function Sidebar() {
       {/* Logo */}
       <div className="flex items-center gap-3 px-6 py-5 border-b border-surface-700">
         <div>
-          <p className="text-xl font-bold text-white leading-tight">Scrapers</p>
+        <p className="text-xl font-bold text-white leading-tight">SiAPA</p>
         </div>
       </div>
 

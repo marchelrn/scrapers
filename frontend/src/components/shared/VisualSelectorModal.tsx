@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { proxyApi } from '../../api/methods'
-import { X, MousePointer, Check, Loader2, RefreshCw, Layers } from 'lucide-react'
+import { X, MousePointer, Check, Loader2, RefreshCw, Layers, CheckSquare } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface VisualSelectorModalProps {
@@ -50,31 +50,71 @@ export function VisualSelectorModal({ initialUrl, onSelectSelector, onClose }: V
     const style = doc.createElement('style')
     style.innerHTML = `
       .bps-picker-hover { outline: 2px solid #14b8a6 !important; background: rgba(20, 184, 166, 0.15) !important; cursor: pointer !important; }
-      .bps-picker-selected { outline: 3px solid #f59e0b !important; background: rgba(245, 158, 11, 0.25) !important; }
+      .bps-picker-selected { outline: 3px solid #f59e0b !important; background: rgba(245, 158, 11, 0.3) !important; }
     `
     doc.head.appendChild(style)
+
+    const ignoredClassPrefixes = [
+      'flex', 'grid', 'col', 'row', 'items', 'justify', 'center', 'relative', 'absolute',
+      'portrait', 'w-', 'h-', 'max-', 'min-', 'mx-', 'my-', 'px-', 'py-', 'pt-', 'pb-',
+      'mt-', 'mb-', 'ml-', 'mr-', 'p-', 'pt-', 'pb-', 'pl-', 'pr-', 'rounded-', 'border-',
+      'leading-', 'text-', 'gap-', 'z-', 'font-', 'bg-', 'st-', '__', 'bps-picker',
+      'sm:', 'md:', 'lg:', 'xl:', '2xl:', 'hover:', 'focus:', 'group-'
+    ]
+
+    const filterClasses = (classNameStr: string): string => {
+      if (!classNameStr || typeof classNameStr !== 'string') return ''
+      return classNameStr
+        .trim()
+        .split(/\s+/)
+        .filter(cls => {
+          if (!cls) return false
+          if (cls.includes(':')) return false
+          if (ignoredClassPrefixes.some(prefix => cls.startsWith(prefix))) return false
+          return true
+        })
+        .join('.')
+    }
 
     const generateSelector = (el: HTMLElement): string => {
       if (el.id) return `#${el.id}`
       let path: string[] = []
       let curr: HTMLElement | null = el
-      while (curr && curr.nodeType === Node.ELEMENT_NODE) {
-        let selector = curr.nodeName.toLowerCase()
-        if (curr.className && typeof curr.className === 'string') {
-          const classes = curr.className.trim().split(/\s+/).filter(c => !c.startsWith('bps-picker')).join('.')
-          if (classes) selector += `.${classes}`
-        }
-        path.unshift(selector)
+      while (curr && curr.nodeType === Node.ELEMENT_NODE && curr.nodeName.toLowerCase() !== 'html' && curr.nodeName.toLowerCase() !== 'body') {
+        let tagName = curr.nodeName.toLowerCase()
         if (curr.id) {
-          path[0] = `#${curr.id}`
+          path.unshift(`#${curr.id}`)
           break
         }
+
+        const cleanCls = filterClasses(curr.className)
+        let selector = tagName
+        if (cleanCls) {
+          selector += `.${cleanCls}`
+        }
+
+        const parent = curr.parentElement
+        if (parent) {
+          const siblingsOfSameTag = Array.from(parent.children).filter(
+            child => child.nodeName.toLowerCase() === tagName
+          )
+          if (siblingsOfSameTag.length > 1) {
+            const index = siblingsOfSameTag.indexOf(curr) + 1
+            selector += `:nth-of-type(${index})`
+          }
+        }
+
+        path.unshift(selector)
         curr = curr.parentElement
       }
-      return path.join(' > ')
+
+      if (path.length === 0) return el.nodeName.toLowerCase()
+      const finalPath = path.length > 4 ? path.slice(-4) : path
+      return finalPath.join(' > ')
     }
 
     let lastHovered: HTMLElement | null = null
+    const selectedMap = new Map<string, HTMLElement>()
 
     doc.body.addEventListener('mouseover', (e) => {
       e.stopPropagation()
@@ -87,14 +127,32 @@ export function VisualSelectorModal({ initialUrl, onSelectSelector, onClose }: V
       setHoveredCss(generateSelector(target))
     })
 
-    doc.body.addEventListener('click', (e) => {
+    doc.body.addEventListener('click', (e: MouseEvent) => {
       e.preventDefault()
       e.stopPropagation()
       const target = e.target as HTMLElement
-      doc.querySelectorAll('.bps-picker-selected').forEach((el) => el.classList.remove('bps-picker-selected'))
-      target.classList.add('bps-picker-selected')
       const sel = generateSelector(target)
-      setSelectedCss(sel)
+
+      const isMulti = e.ctrlKey || e.metaKey
+
+      if (isMulti) {
+        if (selectedMap.has(sel)) {
+          selectedMap.get(sel)?.classList.remove('bps-picker-selected')
+          selectedMap.delete(sel)
+        } else {
+          target.classList.add('bps-picker-selected')
+          selectedMap.set(sel, target)
+        }
+      } else {
+        selectedMap.forEach((el) => el.classList.remove('bps-picker-selected'))
+        doc.querySelectorAll('.bps-picker-selected').forEach((el) => el.classList.remove('bps-picker-selected'))
+        selectedMap.clear()
+        target.classList.add('bps-picker-selected')
+        selectedMap.set(sel, target)
+      }
+
+      const combined = Array.from(selectedMap.keys()).join(', ')
+      setSelectedCss(combined)
     })
   }
 
@@ -107,6 +165,8 @@ export function VisualSelectorModal({ initialUrl, onSelectSelector, onClose }: V
     onClose()
   }
 
+  const selectedCount = selectedCss ? selectedCss.split(',').filter(Boolean).length : 0
+
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-6 animate-fade-in">
       <div className="card w-full max-w-6xl h-[90vh] flex flex-col bg-surface-900 border-surface-600 shadow-2xl overflow-hidden">
@@ -117,13 +177,23 @@ export function VisualSelectorModal({ initialUrl, onSelectSelector, onClose }: V
               <MousePointer className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-white">Visual Selector (Point & Click)</h3>
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <span>Visual Selector (Point & Click)</span>
+              </h3>
               <p className="text-xs text-gray-400">Arahkan kursor & klik elemen target untuk membuat CSS Selector otomatis</p>
             </div>
           </div>
-          <button onClick={onClose} className="btn-ghost btn-icon text-gray-400 hover:text-white">
-            <X className="w-5 h-5" />
-          </button>
+
+          <div className="flex items-center gap-3">
+            <span className="hidden sm:flex px-3 py-1 rounded-full text-xs font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30 items-center gap-1.5">
+              <Layers className="w-3.5 h-3.5" />
+              <span>Tahan <strong>Ctrl / Cmd</strong> untuk memilih &gt; 1 elemen</span>
+            </span>
+
+            <button onClick={onClose} className="btn-ghost btn-icon text-gray-400 hover:text-white">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* URL Bar */}
@@ -166,8 +236,8 @@ export function VisualSelectorModal({ initialUrl, onSelectSelector, onClose }: V
         <div className="px-6 py-4 border-t border-surface-700 bg-surface-850 flex items-center justify-between gap-4">
           <div className="flex-1 min-w-0">
             <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-              <Layers className="w-3.5 h-3.5 text-brand-400" />
-              <span>CSS Selector Terpilih:</span>
+              <CheckSquare className="w-3.5 h-3.5 text-brand-400" />
+              <span>CSS Selector Terpilih ({selectedCount} elemen):</span>
             </p>
             <p className="font-mono text-xs text-amber-300 bg-surface-900 px-3 py-2 rounded-xl border border-surface-700 truncate">
               {selectedCss || hoveredCss || 'Belum ada elemen yang diklik'}
@@ -180,7 +250,7 @@ export function VisualSelectorModal({ initialUrl, onSelectSelector, onClose }: V
             </button>
             <button onClick={handleConfirm} className="btn-primary text-xs">
               <Check className="w-4 h-4" />
-              <span>Gunakan Selector Ini</span>
+              <span>Gunakan {selectedCount > 1 ? `${selectedCount} Selector` : 'Selector Ini'}</span>
             </button>
           </div>
         </div>
