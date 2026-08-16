@@ -12,6 +12,7 @@ import { JobDetailPage } from './pages/JobDetailPage'
 import { SchedulesPage } from './pages/SchedulesPage'
 import { SecretsPage } from './pages/SecretsPage'
 import { UsersPage } from './pages/UsersPage'
+import { GuidePage } from './pages/GuidePage'
 
 export default function App() {
   return (
@@ -41,6 +42,8 @@ export default function App() {
             <Route path="/jobs/:id" element={<JobDetailPage />} />
             <Route path="/schedules" element={<SchedulesPage />} />
             <Route path="/secrets" element={<SecretsPage />} />
+            <Route path="/panduan" element={<GuidePage />} />
+            <Route path="/guide" element={<Navigate to="/panduan" replace />} />
 
             {/* Admin only route */}
             <Route element={<ProtectedRoute adminOnly />}>

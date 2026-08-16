@@ -9,4 +9,5 @@ goose
 backend/workers/python/__pycache__
 backend/workers/python/venv
 backend/workers/python/data_scraping
+frontend/scripts/generate-pdf.mjs
 catatan.md
