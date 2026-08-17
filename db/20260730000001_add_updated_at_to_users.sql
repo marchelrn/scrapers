@@ -1,5 +1,0 @@
--- +goose Up
-ALTER TABLE users ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
-
--- +goose Down
-ALTER TABLE users DROP COLUMN IF EXISTS updated_at;
