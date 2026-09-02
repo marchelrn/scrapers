@@ -150,6 +150,11 @@ export interface CreateSecretRequest {
 }
 
 // ─── Methods (Registry) ───────────────────────────────────────────────────────
+export interface ParameterOption {
+  label: string
+  value: string
+}
+
 export interface MethodParam {
   Name?: string
   name?: string
@@ -165,12 +170,18 @@ export interface MethodParam {
   placeholder?: string
   Description?: string
   description?: string
+  Options?: ParameterOption[]
+  options?: ParameterOption[]
 }
 export interface Method {
   code: string
   name: string
   description?: string
   version?: string
+  category?: string
+  author?: string
+  icon?: string
+  tags?: string[]
   parameters?: MethodParam[]
   auth_capabilities?: string[]
 }
