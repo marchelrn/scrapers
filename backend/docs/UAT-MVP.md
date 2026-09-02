@@ -3,7 +3,7 @@
 Dokumen ini berisi kriteria penerimaan (_acceptance criteria_) untuk **Sistem Manajemen Scrapers BPS**. Silakan uji fungsionalitas berikut di environment *Staging/Development* sebelum memutuskan perilisan *Production* (Sesi 9.3).
 
 ## 1. Otorisasi dan Kepemilikan (Sesi 2.1)
-- [ ] Login sebagai **Admin**: Dapat melihat seluruh data dari *Dashboard*, *Jobs*, *Configs*, *Secrets*, dan *Schedules*.
+- [ ] Login sebagai **Admin**: Dapat melihat seluruh data dari *Dashboard*, *Jobs*, *Configs*, dan *Schedules*.
 - [ ] Login sebagai **Operator A**: Dapat membuat konfigurasi baru dan menjalankannya.
 - [ ] Login sebagai **Operator B**: Tidak dapat melihat, menghapus, atau mengedit konfigurasi, job, dan jadwal milik **Operator A**.
 
@@ -19,11 +19,10 @@ Buat Konfigurasi dengan `method_code: google_search`.
 - [ ] Pastikan di dalam `results` *job endpoint* terdapat susunan _JSON_ dengan _keys_: `title`, `url`, `summary`, dan `content` (isi teks berita yang dibersihkan).
 - [ ] Pastikan tidak ada _error library_ di log.
 
-## 4. Keamanan Secret / Autentikasi (Sesi 6.1)
-- [ ] Masukkan API Key / Token rekaan Anda ke `POST /secrets`. 
-- [ ] Panggil konfigurasi `target_url` dengan `auth_type: bearer_token` dan merujuk ke ID secret tersebut.
+## 4. Penanganan Kegagalan Job (Sesi 4.3 & 9.1)
 - [ ] Secara sengaja, masukan URL *target* yang tidak bisa dijangkau agar eksekusi _Failed_.
-- [ ] Buka log kegagalan job. Pastikan nilai token asli Anda TIDAK TAMPIL di log (tersensor menjadi `***REDACTED***`).
+- [ ] Buka log kegagalan job. Pastikan pesan error tercatat dengan jelas beserta *hint* penanganannya, dan tidak ada data sensitif yang ikut tercetak.
+- [ ] Arahkan konfigurasi ke halaman yang mewajibkan login. Job harus gagal dengan pesan yang jelas: sistem tidak menyimpan kredensial, sehingga target berlogin memang tidak didukung.
 
 ## 5. Scheduler Otomatis (Sesi 5.1 & 5.2)
 - [ ] Buat jadwal untuk config dengan CRON ekspresi `*/1 * * * *` (setiap menit).

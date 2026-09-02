@@ -2,15 +2,14 @@ import { useEffect, useState } from 'react'
 import { Header } from '../components/layout/Header'
 import { configsApi } from '../api/configs'
 import { methodsApi } from '../api/methods'
-import { secretsApi } from '../api/secrets'
 import { schedulesApi } from '../api/schedules'
-import type { ScrapingConfig, Method, Secret, Schedule } from '../types'
+import type { ScrapingConfig, Method, Schedule } from '../types'
 import { VisualSelectorModal } from '../components/shared/VisualSelectorModal'
 import { LowCodeSchedulePicker } from '../components/shared/LowCodeSchedulePicker'
 import { UpdateConfigModal } from '../components/shared/UpdateConfigModal'
 import {
   Plus, Play, Trash2, CheckCircle, XCircle,
-  MousePointer, Loader2, KeyRound, Calendar, Lock, Edit3
+  MousePointer, Loader2, Calendar, Edit3
 } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
@@ -19,7 +18,6 @@ export function ConfigsPage() {
   const navigate = useNavigate()
   const [configs, setConfigs] = useState<ScrapingConfig[]>([])
   const [methods, setMethods] = useState<Method[]>([])
-  const [secrets, setSecrets] = useState<Secret[]>([])
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -36,10 +34,6 @@ export function ConfigsPage() {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [methodCode, setMethodCode] = useState('target_url')
-
-  // Auth Vault Integration State
-  const [authType, setAuthType] = useState('none')
-  const [secretReference, setSecretReference] = useState('')
 
   // Target URL UX Options
   const [targetUrlUX, setTargetUrlUX] = useState<'keyword' | 'visual'>('keyword')
@@ -62,15 +56,13 @@ export function ConfigsPage() {
 
   const fetchInitialData = async () => {
     try {
-      const [cfgs, meths, secs, schs] = await Promise.all([
+      const [cfgs, meths, schs] = await Promise.all([
         configsApi.getAll(),
         methodsApi.getAll().catch(() => []),
-        secretsApi.getAll().catch(() => []),
         schedulesApi.getAll().catch(() => []),
       ])
       setConfigs(cfgs || [])
       setMethods(meths || [])
-      setSecrets(secs || [])
       setSchedules(schs || [])
     } catch {
       toast.error('Gagal memuat data awal konfigurasi')
@@ -141,12 +133,6 @@ export function ConfigsPage() {
             paramsPayload.push({ parameter_name: k, parameter_value: v })
           })
         }
-      }
-
-      // Add auth parameter if specified
-      paramsPayload.push({ parameter_name: 'auth_type', parameter_value: authType })
-      if (authType !== 'none' && secretReference) {
-        paramsPayload.push({ parameter_name: 'secret_reference', parameter_value: secretReference })
       }
 
       await configsApi.create({
@@ -426,7 +412,7 @@ export function ConfigsPage() {
             <div className="flex items-center justify-between border-b border-surface-700 pb-4">
               <div>
                 <h3 className="text-base font-bold text-white">Buat Konfigurasi Scraping Baru</h3>
-                <p className="text-xs text-gray-400">Dukungan dynamic form blueprint & secret vault authentication</p>
+                <p className="text-xs text-gray-400">Dukungan dynamic form blueprint dari registry metode</p>
               </div>
               <button
                 onClick={() => setShowCreateModal(false)}
@@ -619,7 +605,6 @@ export function ConfigsPage() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {paramsList.map((param: any, i: number) => {
                           const pName = param.Name || param.name || `param_${i}`
-                          if (pName === 'auth_type' || pName === 'secret_reference') return null
                           const pLabel = param.Label || param.label || pName
                           const pType = (param.Type || param.type || 'text').toLowerCase()
                           const pReq = param.Required ?? param.required ?? false
@@ -686,53 +671,6 @@ export function ConfigsPage() {
                   })()}
                 </div>
               )}
-
-              {/* Secret Vault & Authentication Integration */}
-              <div className="p-4 rounded-xl bg-surface-800 border border-surface-700 space-y-3">
-                <h4 className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
-                  <KeyRound className="w-3.5 h-3.5" />
-                  <span>Autentikasi & Secret Vault (Kredensial)</span>
-                </h4>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="form-group">
-                    <label className="label">Tipe Otentikasi Web</label>
-                    <select
-                      value={authType}
-                      onChange={(e) => setAuthType(e.target.value)}
-                      className="input"
-                    >
-                      <option value="none">Tanpa Login (Public Page)</option>
-                      <option value="cookie">Cookie Session</option>
-                      <option value="api_key">API Key</option>
-                      <option value="bearer_token">Bearer Token</option>
-                      <option value="basic_auth">Basic Auth</option>
-                    </select>
-                  </div>
-
-                  {authType !== 'none' && (
-                    <div className="form-group">
-                      <label className="label flex items-center gap-1">
-                        <Lock className="w-3 h-3 text-amber-400" />
-                        <span>Pilih Secret dari Vault</span>
-                      </label>
-                      <select
-                        value={secretReference}
-                        onChange={(e) => setSecretReference(e.target.value)}
-                        required={authType !== 'none'}
-                        className="input font-mono text-xs border-amber-500/40"
-                      >
-                        <option value="">-- Pilih Secret Key / Cookie --</option>
-                        {secrets.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name} ({s.secret_type})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                </div>
-              </div>
 
               <button
                 type="submit"
@@ -829,7 +767,6 @@ export function ConfigsPage() {
         onClose={() => setShowUpdateModal(false)}
         onSuccess={fetchInitialData}
         initialMethods={methods}
-        initialSecrets={secrets}
       />
     </div>
   )

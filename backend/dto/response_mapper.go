@@ -22,18 +22,6 @@ func ToConfigParameterResponse(parameter models.ConfigParameter) ConfigParameter
 	}
 }
 
-func ToSecretResponse(secret models.Secret) SecretResponse {
-	return SecretResponse{
-		ID:          secret.ID,
-		Name:        secret.Name,
-		Description: secret.Description,
-		SecretType:  secret.SecretType,
-		CreatedBy:   secret.CreatedBy,
-		CreatedAt:   secret.CreatedAt,
-		UpdatedAt:   secret.UpdatedAt,
-	}
-}
-
 func ToScrapingConfigResponse(config models.ScrapingConfig) ScrapingConfigResponse {
 	response := ScrapingConfigResponse{
 		ID:              config.ID,

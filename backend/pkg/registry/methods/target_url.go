@@ -82,24 +82,7 @@ func (m *TargetURLMethod) ParameterDefinitions() []registry.ParameterDefinition 
 			Required:    false,
 			Placeholder: "e.g. Inflasi",
 		},
-		{
-			Name:     "auth_type",
-			Label:    "Authentication Type",
-			Type:     "text",
-			Required: true,
-			Default:  "none",
-		},
-		{
-			Name:     "secret_reference",
-			Label:    "Secret ID",
-			Type:     "text",
-			Required: false,
-		},
 	}
-}
-
-func (m *TargetURLMethod) AuthenticationCapabilities() []string {
-	return []string{"none", "api_key", "bearer_token"}
 }
 
 func (m *TargetURLMethod) Validate(params map[string]interface{}) error {
@@ -124,20 +107,6 @@ func (m *TargetURLMethod) Validate(params map[string]interface{}) error {
 		return errors.New("parameter 'technique' is required")
 	}
 	technique := techniqueVal.(string)
-
-	// Validate Auth Type
-	authTypeVal, ok := params["auth_type"]
-	authType := "none"
-	if ok && authTypeVal != "" {
-		authType = authTypeVal.(string)
-	}
-
-	if authType != "none" {
-		secretRef, hasRef := params["secret_reference"]
-		if !hasRef || secretRef == "" {
-			return errors.New("parameter 'secret_reference' is required when auth_type is not none")
-		}
-	}
 
 	// Validate Technique specific parameters
 	switch technique {

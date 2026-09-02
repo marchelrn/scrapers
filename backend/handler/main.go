@@ -9,7 +9,6 @@ type Controllers struct {
 	Schedule  *ScheduleController
 	Job       *ScrapingJobController
 	Dashboard *DashboardController
-	Secret    *SecretController
 }
 
 func New(svc *contract.Service) Controllers {
@@ -20,7 +19,6 @@ func New(svc *contract.Service) Controllers {
 		Schedule:  &ScheduleController{},
 		Job:       &ScrapingJobController{},
 		Dashboard: &DashboardController{},
-		Secret:    &SecretController{},
 	}
 
 	ctrl.Auth.InitService(svc)
@@ -29,7 +27,6 @@ func New(svc *contract.Service) Controllers {
 	ctrl.Schedule.InitService(svc)
 	ctrl.Job.InitService(svc)
 	ctrl.Dashboard.InitService(svc)
-	ctrl.Secret.InitService(svc)
 
 	return ctrl
 }

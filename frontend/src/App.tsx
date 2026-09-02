@@ -10,7 +10,6 @@ import { ConfigDetailPage } from './pages/ConfigDetailPage'
 import { JobsPage } from './pages/JobsPage'
 import { JobDetailPage } from './pages/JobDetailPage'
 import { SchedulesPage } from './pages/SchedulesPage'
-import { SecretsPage } from './pages/SecretsPage'
 import { UsersPage } from './pages/UsersPage'
 import { GuidePage } from './pages/GuidePage'
 
@@ -41,7 +40,6 @@ export default function App() {
             <Route path="/jobs" element={<JobsPage />} />
             <Route path="/jobs/:id" element={<JobDetailPage />} />
             <Route path="/schedules" element={<SchedulesPage />} />
-            <Route path="/secrets" element={<SecretsPage />} />
             <Route path="/panduan" element={<GuidePage />} />
             <Route path="/guide" element={<Navigate to="/panduan" replace />} />
 

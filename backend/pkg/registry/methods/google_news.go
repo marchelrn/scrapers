@@ -70,29 +70,13 @@ func (m *GoogleNewsMethod) ParameterDefinitions() []registry.ParameterDefinition
 			Default:     true,
 			Description: "Jika aktif, URL yang sudah pernah diambil pada konfigurasi ini tidak akan diambil ulang.",
 		},
-		{
-			Name:     "auth_type",
-			Label:    "Authentication Type",
-			Type:     "text",
-			Required: true,
-			Default:  "none",
-		},
 	}
-}
-
-func (m *GoogleNewsMethod) AuthenticationCapabilities() []string {
-	return []string{"none"}
 }
 
 func (m *GoogleNewsMethod) Validate(params map[string]interface{}) error {
 	query, ok := params["query"]
 	if !ok || query == "" {
 		return errors.New("parameter 'query' is required")
-	}
-
-	authType, ok := params["auth_type"]
-	if !ok || authType != "none" {
-		return errors.New("parameter 'auth_type' must be 'none'")
 	}
 
 	return nil

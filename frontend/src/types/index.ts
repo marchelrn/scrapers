@@ -131,24 +131,6 @@ export interface UpdateScheduleRequest {
   run_once?: boolean
 }
 
-// ─── Secrets ─────────────────────────────────────────────────────────────────
-export type SecretType = 'api_key' | 'bearer_token' | 'basic_auth' | 'cookie'
-export interface Secret {
-  id: string
-  name: string
-  description?: string
-  secret_type: SecretType
-  created_by: string
-  created_at: string
-  updated_at: string
-}
-export interface CreateSecretRequest {
-  name: string
-  description?: string
-  secret_type: SecretType
-  secret_value: string
-}
-
 // ─── Methods (Registry) ───────────────────────────────────────────────────────
 export interface ParameterOption {
   label: string
@@ -183,7 +165,6 @@ export interface Method {
   icon?: string
   tags?: string[]
   parameters?: MethodParam[]
-  auth_capabilities?: string[]
 }
 
 // ─── Generic API response ────────────────────────────────────────────────────

@@ -19,7 +19,6 @@ type ScrapingJobService struct {
 	logRepo         contract.ScrapingLogRepository
 	resultRepo      contract.ScrapingResultRepository
 	configRepo      contract.ScrapingConfigRepository
-	secretRepo      contract.SecretRepository
 	configParamRepo contract.ConfigParameterRepository
 }
 
@@ -28,7 +27,6 @@ func ImplScrapingJobService(
 	logRepo contract.ScrapingLogRepository,
 	resultRepo contract.ScrapingResultRepository,
 	configRepo contract.ScrapingConfigRepository,
-	secretRepo contract.SecretRepository,
 	configParamRepo contract.ConfigParameterRepository,
 ) contract.ScrapingJobService {
 	return &ScrapingJobService{
@@ -36,7 +34,6 @@ func ImplScrapingJobService(
 		logRepo:         logRepo,
 		resultRepo:      resultRepo,
 		configRepo:      configRepo,
-		secretRepo:      secretRepo,
 		configParamRepo: configParamRepo,
 	}
 }
@@ -348,41 +345,6 @@ func (s *ScrapingJobService) executeJobAsync(jobID string, config *models.Scrapi
 				}
 			}
 			params["previously_scraped_urls"] = seenURLs
-		}
-	}
-
-	// Resolve secret_reference if present
-	if secretID, ok := params["secret_reference"]; ok && secretID != "" {
-		if sidStr, isStr := secretID.(string); isStr {
-			// Get secret (bypassing ownership check since this is internal execution)
-			// But ideally we should ensure the config owner owns the secret.
-			// Let's use the config creator ID to fetch it safely.
-			creatorID := ""
-			if config.CreatedBy != nil {
-				creatorID = *config.CreatedBy
-			}
-
-			secret, err := s.secretRepo.GetByID(sidStr, creatorID, models.UserRoleOperator)
-			if err != nil {
-				// Fallback to admin if config owner is missing or something
-				secret, err = s.secretRepo.GetByID(sidStr, "", models.UserRoleAdmin)
-			}
-
-			if err == nil && secret != nil {
-				// Inject the resolved secret value into the params for the worker
-				// Clean the secret from accidental quotes or spaces that user might have pasted into DB
-				cleanSecret := strings.TrimSpace(secret.SecretValue)
-				cleanSecret = strings.Trim(cleanSecret, `"`)
-				cleanSecret = strings.Trim(cleanSecret, `'`)
-
-				params["_resolved_secret_value"] = cleanSecret
-				params["_resolved_secret_type"] = secret.SecretType
-			} else {
-				s.AddLog(jobID, dto.CreateScrapingLogRequest{
-					Level:   models.ScrapingLogLevelWarn,
-					Message: "Failed to resolve secret_reference: " + sidStr,
-				})
-			}
 		}
 	}
 

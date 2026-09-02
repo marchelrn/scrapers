@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react'
-import type { ScrapingConfig, Method, Secret } from '../../types'
+import type { ScrapingConfig, Method } from '../../types'
 import { configsApi } from '../../api/configs'
 import { methodsApi } from '../../api/methods'
-import { secretsApi } from '../../api/secrets'
 import { VisualSelectorModal } from './VisualSelectorModal'
-import { MousePointer, Loader2, KeyRound, Lock } from 'lucide-react'
+import { MousePointer, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface UpdateConfigModalProps {
@@ -13,7 +12,6 @@ interface UpdateConfigModalProps {
   onClose: () => void
   onSuccess: () => void
   initialMethods?: Method[]
-  initialSecrets?: Secret[]
 }
 
 export function UpdateConfigModal({
@@ -22,10 +20,8 @@ export function UpdateConfigModal({
   onClose,
   onSuccess,
   initialMethods,
-  initialSecrets,
 }: UpdateConfigModalProps) {
   const [methods, setMethods] = useState<Method[]>(initialMethods || [])
-  const [secrets, setSecrets] = useState<Secret[]>(initialSecrets || [])
   const [submitting, setSubmitting] = useState(false)
   const [showVisualSelector, setShowVisualSelector] = useState(false)
 
@@ -34,10 +30,6 @@ export function UpdateConfigModal({
   const [description, setDescription] = useState('')
   const [methodCode, setMethodCode] = useState('target_url')
   const [status, setStatus] = useState<'active' | 'inactive'>('active')
-
-  // Auth Vault Integration State
-  const [authType, setAuthType] = useState('none')
-  const [secretReference, setSecretReference] = useState('')
 
   // Target URL UX Options
   const [targetUrlUX, setTargetUrlUX] = useState<'keyword' | 'visual'>('keyword')
@@ -53,16 +45,13 @@ export function UpdateConfigModal({
     max_results: 5,
   })
 
-  // Fetch methods and secrets if not provided
+  // Fetch methods if not provided
   useEffect(() => {
     if (!isOpen) return
     if (!initialMethods || initialMethods.length === 0) {
       methodsApi.getAll().then((m) => setMethods(m || [])).catch(() => {})
     }
-    if (!initialSecrets || initialSecrets.length === 0) {
-      secretsApi.getAll().then((s) => setSecrets(s || [])).catch(() => {})
-    }
-  }, [isOpen, initialMethods, initialSecrets])
+  }, [isOpen, initialMethods])
 
   // Populate form fields when config prop changes
   useEffect(() => {
@@ -93,16 +82,10 @@ export function UpdateConfigModal({
       if (paramMap.has('selector')) {
         setSelector(String(paramMap.get('selector') ?? 'h1, table.data'))
       }
-      if (paramMap.has('auth_type')) {
-        setAuthType(String(paramMap.get('auth_type') ?? 'none'))
-      }
-      if (paramMap.has('secret_reference')) {
-        setSecretReference(String(paramMap.get('secret_reference') ?? ''))
-      }
 
       const dynObj: Record<string, any> = {}
       paramMap.forEach((v, k) => {
-        if (!['url', 'technique', 'keyword', 'selector', 'auth_type', 'secret_reference'].includes(k)) {
+        if (!['url', 'technique', 'keyword', 'selector'].includes(k)) {
           dynObj[k] = v
         }
       })
@@ -172,11 +155,6 @@ export function UpdateConfigModal({
         }
       }
 
-      paramsPayload.push({ parameter_name: 'auth_type', parameter_value: authType })
-      if (authType !== 'none' && secretReference) {
-        paramsPayload.push({ parameter_name: 'secret_reference', parameter_value: secretReference })
-      }
-
       await configsApi.update(config.id, {
         name,
         description: description || undefined,
@@ -203,7 +181,7 @@ export function UpdateConfigModal({
           <div className="flex items-center justify-between border-b border-surface-700 pb-4">
             <div>
               <h3 className="text-base font-bold text-white">Update Konfigurasi Scraping</h3>
-              <p className="text-xs text-gray-400">Dukungan dynamic form blueprint & secret vault authentication</p>
+              <p className="text-xs text-gray-400">Dukungan dynamic form blueprint dari registry metode</p>
             </div>
             <button
               onClick={onClose}
@@ -248,7 +226,7 @@ export function UpdateConfigModal({
                   {methods.length === 0 ? (
                     <>
                       <option value="target_url">Target URL</option>
-                      <option value="google_search">Web Search (News)</option>
+                      <option value="google_news">Google News RSS Search</option>
                     </>
                   ) : (
                     methods.map((m) => (
@@ -375,7 +353,7 @@ export function UpdateConfigModal({
                   let paramsList = foundMethod?.parameters
 
                   if (!paramsList || paramsList.length === 0) {
-                    if (methodCode === 'google_search' || methodCode === 'google_news') {
+                    if (methodCode === 'google_news') {
                       paramsList = [
                         { name: 'query', label: 'Search Query', type: 'text', required: true, placeholder: 'e.g. Pertanian Sulawesi Utara 2026' },
                         { name: 'domain_filter', label: 'Domain Filter (Optional)', type: 'text', required: false, placeholder: 'e.g. bps.go.id, antaranews.com' },
@@ -408,7 +386,6 @@ export function UpdateConfigModal({
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {paramsList.map((param: any, i: number) => {
                         const pName = param.Name || param.name || `param_${i}`
-                        if (pName === 'auth_type' || pName === 'secret_reference') return null
                         const pLabel = param.Label || param.label || pName
                         const pType = (param.Type || param.type || 'text').toLowerCase()
                         const pReq = param.Required ?? param.required ?? false
@@ -475,53 +452,6 @@ export function UpdateConfigModal({
                 })()}
               </div>
             )}
-
-            {/* Secret Vault & Authentication Integration */}
-            <div className="p-4 rounded-xl bg-surface-800 border border-surface-700 space-y-3">
-              <h4 className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
-                <KeyRound className="w-3.5 h-3.5" />
-                <span>Autentikasi & Secret Vault (Kredensial)</span>
-              </h4>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="form-group">
-                  <label className="label">Tipe Otentikasi Web</label>
-                  <select
-                    value={authType}
-                    onChange={(e) => setAuthType(e.target.value)}
-                    className="input"
-                  >
-                    <option value="none">Tanpa Login (Public Page)</option>
-                    <option value="cookie">Cookie Session</option>
-                    <option value="api_key">API Key</option>
-                    <option value="bearer_token">Bearer Token</option>
-                    <option value="basic_auth">Basic Auth</option>
-                  </select>
-                </div>
-
-                {authType !== 'none' && (
-                  <div className="form-group">
-                    <label className="label flex items-center gap-1">
-                      <Lock className="w-3 h-3 text-amber-400" />
-                      <span>Pilih Secret dari Vault</span>
-                    </label>
-                    <select
-                      value={secretReference}
-                      onChange={(e) => setSecretReference(e.target.value)}
-                      required={authType !== 'none'}
-                      className="input font-mono text-xs border-amber-500/40"
-                    >
-                      <option value="">-- Pilih Secret Key / Cookie --</option>
-                      {secrets.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name} ({s.secret_type})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-              </div>
-            </div>
 
             <button
               type="submit"
