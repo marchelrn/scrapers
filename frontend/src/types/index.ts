@@ -111,18 +111,24 @@ export interface Schedule {
   cron_expression: string
   timezone: string
   enabled: boolean
+  /** true: dijalankan sekali pada waktu cocok berikutnya, lalu nonaktif sendiri */
+  run_once: boolean
   next_run?: string
+  /** Waktu eksekusi jadwal sekali-jalan yang sudah terpakai */
+  last_run?: string
 }
 export interface CreateScheduleRequest {
   config_id: string
   cron_expression: string
   timezone?: string
   enabled?: boolean
+  run_once?: boolean
 }
 export interface UpdateScheduleRequest {
   cron_expression?: string
   timezone?: string
   enabled?: boolean
+  run_once?: boolean
 }
 
 // ─── Secrets ─────────────────────────────────────────────────────────────────

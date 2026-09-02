@@ -63,7 +63,9 @@ func ToScheduleResponse(schedule models.Schedule) ScheduleResponse {
 		CronExpression: schedule.CronExpression,
 		Timezone:       schedule.Timezone,
 		Enabled:        schedule.Enabled,
+		RunOnce:        schedule.RunOnce,
 		NextRun:        schedule.NextRun,
+		LastRun:        schedule.LastRun,
 	}
 }
 
