@@ -58,6 +58,7 @@ export function ConfigsPage() {
   // Schedule Modal Form State
   const [cronExpression, setCronExpression] = useState('0 0 * * *')
   const [scheduleTimezone, setScheduleTimezone] = useState('Asia/Makassar')
+  const [scheduleRunOnce, setScheduleRunOnce] = useState(false)
 
   const fetchInitialData = async () => {
     try {
@@ -194,11 +195,34 @@ export function ConfigsPage() {
     if (existingSchedule) {
       setCronExpression(existingSchedule.cron_expression)
       setScheduleTimezone(existingSchedule.timezone || 'Asia/Makassar')
+      setScheduleRunOnce(existingSchedule.run_once)
     } else {
       setCronExpression('0 0 * * *')
       setScheduleTimezone('Asia/Makassar')
+      setScheduleRunOnce(false)
     }
     setShowScheduleModal(true)
+  }
+
+  const   handleUnassignSchedule = async (scheduleId: number) => {
+    // const confirmed = confirm(
+    //   configName
+    //     ? `Apakah Anda yakin ingin membatalkan/unassign jadwal otomatis untuk konfigurasi "${configName}"?`
+    //     : 'Apakah Anda yakin ingin membatalkan/unassign jadwal otomatis ini?'
+    // )
+    // if (!confirmed) return
+
+    setSubmitting(true)
+    try {
+      await schedulesApi.delete(scheduleId)
+      toast.success('Jadwal scheduler berhasil di-unassign / dihapus')
+      setShowScheduleModal(false)
+      fetchInitialData()
+    } catch {
+      toast.error('Gagal membatalkan jadwal')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const handleOpenUpdateModal = (config: ScrapingConfig) => {
@@ -217,6 +241,7 @@ export function ConfigsPage() {
           cron_expression: cronExpression,
           timezone: scheduleTimezone,
           enabled: true,
+          run_once: scheduleRunOnce,
         })
       } else {
         await schedulesApi.create({
@@ -224,6 +249,7 @@ export function ConfigsPage() {
           cron_expression: cronExpression,
           timezone: scheduleTimezone,
           enabled: true,
+          run_once: scheduleRunOnce,
         })
       }
       toast.success('Jadwal scraping otomatis berhasil disimpan!')
@@ -239,7 +265,6 @@ export function ConfigsPage() {
   const getMethodNameLabel = (code: string) => {
     const found = methods.find((m) => m.code === code)
     if (found) return found.name
-    if (code === 'google_search') return 'Web Search (News)'
     if (code === 'google_news') return 'Google News RSS Search'
     if (code === 'target_url') return 'Target URL Scraping'
     return code
@@ -280,7 +305,7 @@ export function ConfigsPage() {
                 <thead>
                   <tr>
                     <th>Nama Konfigurasi</th>
-                    <th>Metode Blueprint</th>
+                    <th>Metode Scraping</th>
                     <th>Status</th>
                     <th>Scheduler</th>
                     {/*<th>Dibuat</th>*/}
@@ -296,7 +321,7 @@ export function ConfigsPage() {
                     </tr>
                   ) : (
                     configs.map((c) => {
-                      const hasSchedule = schedules.some((s) => s.config_id === c.id && s.enabled)
+                      const assignedSchedule = schedules.find((s) => s.config_id === c.id)
                       return (
                         <tr key={c.id} className="hover:bg-surface-800/40">
                           <td>
@@ -320,17 +345,38 @@ export function ConfigsPage() {
                             )}
                           </td>
                           <td>
-                            <button
-                              onClick={() => handleOpenScheduleModal(c)}
-                              title={hasSchedule ? 'Edit / Lihat Schedule Aktif' : 'Atur Jadwal Scraping Otomatis'}
-                              className={`text-xs inline-flex items-center gap-1.5 px-2 py-1 rounded border transition-colors ${
-                                hasSchedule
-                                  ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20'
-                                  : 'text-gray-400 border-surface-700 bg-surface-800 hover:text-gray-200'
-                              }`}
-                            >
-                              <span>{hasSchedule ? 'Aktif' : <Calendar className="w-6 h-4" />}</span>
-                            </button>
+                            {assignedSchedule ? (
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  onClick={() => handleOpenScheduleModal(c)}
+                                  title={assignedSchedule.enabled ? 'Jadwal Aktif - Klik untuk ubah' : 'Jadwal Nonaktif - Klik untuk ubah'}
+                                  className={`text-xs inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border font-medium transition-colors ${
+                                    assignedSchedule.enabled
+                                      ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20'
+                                      : 'text-amber-400 border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20'
+                                  }`}
+                                >
+                                  <Calendar className="w-3.5 h-3.5" />
+                                  <span>{assignedSchedule.enabled ? 'Aktif' : 'Nonaktif'}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleUnassignSchedule(assignedSchedule.id)}
+                                  title="Hapus Jadwal Scheduler"
+                                  className="p-1 rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-950/30 border border-surface-700 hover:border-red-500/30 transition-colors"
+                                >
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => handleOpenScheduleModal(c)}
+                                title="Atur Jadwal Scraping Otomatis"
+                                className="text-xs inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-surface-700 bg-surface-800 text-gray-400 hover:text-gray-200 hover:border-surface-600 transition-colors"
+                              >
+                                <Calendar className="w-3.5 h-3.5" />
+                                <span>Atur</span>
+                              </button>
+                            )}
                           </td>
                           {/*<td className="text-xs text-gray-400">*/}
                           {/*  {new Date(c.created_at).toLocaleDateString('id-ID')}*/}
@@ -425,7 +471,7 @@ export function ConfigsPage() {
                     {methods.length === 0 ? (
                       <>
                         <option value="target_url">Target URL</option>
-                        <option value="google_search">Web Search (News)</option>
+                        <option value="google_news">Google News RSS Search</option>
                       </>
                     ) : (
                       methods.map((m) => (
@@ -540,7 +586,7 @@ export function ConfigsPage() {
                     let paramsList = foundMethod?.parameters
 
                     if (!paramsList || paramsList.length === 0) {
-                      if (methodCode === 'google_search' || methodCode === 'google_news') {
+                      if (methodCode === 'google_news') {
                         paramsList = [
                           { name: 'query', label: 'Search Query', type: 'text', required: true, placeholder: 'e.g. Pertanian Sulawesi Utara 2026' },
                           { name: 'domain_filter', label: 'Domain Filter (Optional)', type: 'text', required: false, placeholder: 'e.g. bps.go.id, antaranews.com' },
@@ -716,44 +762,65 @@ export function ConfigsPage() {
       )}
 
       {/* Schedule Modal */}
-      {showScheduleModal && selectedConfigForSchedule && (
-        <div className="fixed inset-0 z-40 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="card w-full max-w-lg bg-surface-900 border-surface-600 shadow-2xl p-6 space-y-5 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-surface-700 pb-3">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-emerald-400" />
-                <span>Atur Jadwal Scraping Otomatis</span>
-              </h3>
-              <button onClick={() => setShowScheduleModal(false)} className="btn-ghost btn-sm text-gray-400">
-                Batal
-              </button>
+      {showScheduleModal && selectedConfigForSchedule && (() => {
+        const existingSchedule = schedules.find((s) => s.config_id === selectedConfigForSchedule.id)
+        return (
+          <div className="fixed inset-0 z-40 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="card w-full max-w-lg bg-surface-900 border-surface-600 shadow-2xl p-6 space-y-5 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between border-b border-surface-700 pb-3">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-emerald-400" />
+                  <span>{existingSchedule ? 'Edit Jadwal Scraping' : 'Atur Jadwal Scraping Otomatis'}</span>
+                </h3>
+                <button onClick={() => setShowScheduleModal(false)} className="btn-ghost btn-sm text-gray-400">
+                  Batal
+                </button>
+              </div>
+
+              <div className="space-y-1 text-xs">
+                <p className="text-gray-400">
+                  Konfigurasi: <span className="text-white font-semibold">{selectedConfigForSchedule.name}</span>
+                </p>
+              </div>
+
+              <form onSubmit={handleCreateSchedule} className="space-y-4">
+                <LowCodeSchedulePicker
+                  initialCron={cronExpression}
+                  initialTimezone={scheduleTimezone}
+                  initialRunOnce={scheduleRunOnce}
+                  onChange={(newCron, newTz, newRunOnce) => {
+                    setCronExpression(newCron)
+                    setScheduleTimezone(newTz)
+                    setScheduleRunOnce(newRunOnce)
+                  }}
+                />
+
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="btn-primary flex-1 justify-center py-2.5 text-xs font-semibold"
+                  >
+                    {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Simpan Jadwal'}
+                  </button>
+
+                  {existingSchedule && (
+                    <button
+                      type="button"
+                      onClick={() => handleUnassignSchedule(existingSchedule.id)}
+                      disabled={submitting}
+                      className="btn-danger btn-sm py-2.5 px-3 text-xs"
+                      title="Batalkan & Hapus Jadwal"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </form>
             </div>
-
-            <p className="text-xs text-gray-400">
-              Konfigurasi: <span className="text-white font-semibold">{selectedConfigForSchedule.name}</span>
-            </p>
-
-            <form onSubmit={handleCreateSchedule} className="space-y-4">
-              <LowCodeSchedulePicker
-                initialCron={cronExpression}
-                initialTimezone={scheduleTimezone}
-                onChange={(newCron, newTz) => {
-                  setCronExpression(newCron)
-                  setScheduleTimezone(newTz)
-                }}
-              />
-
-              <button
-                type="submit"
-                disabled={submitting}
-                className="btn-primary w-full justify-center py-2.5 text-xs font-semibold"
-              >
-                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Simpan Jadwal Scraping'}
-              </button>
-            </form>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* Update Config Modal Overlay */}
       <UpdateConfigModal
