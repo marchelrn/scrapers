@@ -393,6 +393,12 @@ func (s *ScrapingJobService) executeJobAsync(jobID string, config *models.Scrapi
 	workerResult, err := method.Execute(ctx, params)
 	now = time.Now()
 
+	// Catatan non-fatal dari worker dicatat lebih dahulu, baik job berhasil maupun
+	// gagal. Inilah yang menjelaskan kepada operator mengapa sebuah domain
+	// memperlambat kita, mengapa selector jatuh ke tag dasar, atau mengapa jumlah
+	// hasil lebih sedikit dari harapan.
+	s.logWorkerWarnings(jobID, workerResult)
+
 	if err != nil || workerResult.Status != "success" {
 		statusFailed := models.JobStatusFailed
 		s.UpdateStatus(jobID, dto.UpdateScrapingJobRequest{
@@ -406,7 +412,14 @@ func (s *ScrapingJobService) executeJobAsync(jobID string, config *models.Scrapi
 		} else if err != nil {
 			errorMsg = "Execution error: " + err.Error()
 		} else if workerResult != nil && workerResult.Error != nil {
-			errorMsg = "Worker error: " + workerResult.Error.Message
+			// Kode kesalahan ikut dicatat agar operator dapat membedakan
+			// "selector saya salah" (SELECTOR_NOT_FOUND) dari "situs menolak kita"
+			// (BLOCKED_403, RATE_LIMITED_429, CHALLENGE_DETECTED, CIRCUIT_OPEN).
+			code := workerResult.Error.Code
+			if code == "" {
+				code = "EXECUTION_ERROR"
+			}
+			errorMsg = "Worker error [" + code + "]: " + workerResult.Error.Message
 		}
 
 		s.AddLog(jobID, dto.CreateScrapingLogRequest{
@@ -440,4 +453,21 @@ func (s *ScrapingJobService) executeJobAsync(jobID string, config *models.Scrapi
 		Level:   models.ScrapingLogLevelInfo,
 		Message: "Execution finished successfully",
 	})
+}
+
+// logWorkerWarnings menyalin metadata.warnings dari worker Python menjadi log job
+// bertingkat WARN sehingga terlihat pada halaman detail job.
+func (s *ScrapingJobService) logWorkerWarnings(jobID string, workerResult *dto.WorkerResult) {
+	if workerResult == nil {
+		return
+	}
+	for _, warning := range workerResult.Metadata.Warnings {
+		if warning == "" {
+			continue
+		}
+		s.AddLog(jobID, dto.CreateScrapingLogRequest{
+			Level:   models.ScrapingLogLevelWarn,
+			Message: "Catatan worker: " + warning,
+		})
+	}
 }
