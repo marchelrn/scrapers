@@ -9,9 +9,8 @@ Dokumen ini adalah panduan lengkap bagi Developer Frontend (FE) mengenai fitur, 
 Backend telah menyediakan fungsionalitas berikut yang siap dihubungkan dengan UI:
 1. **Otentikasi & Otorisasi:** Login JWT. Backend otomatis memfilter data (Configs, Jobs, Schedules) agar Operator hanya melihat miliknya sendiri, sementara Admin bisa melihat semua.
 2. **Formulir Dinamis (Dynamic Form):** Backend menyediakan blueprint parameter via `/methods`. FE tidak perlu melakukan _hardcode_ form input.
-3. **Penyimpanan Kredensial (Secret Vault):** Menyimpan API Key atau Cookie tanpa menampilkannya sebagai _plain text_.
-4. **Eksekusi Sekali Klik (Shortcut):** Kemampuan untuk mengubah parameter dan langsung menjalankan _Job_ dalam satu panggilan API.
-5. **Pemantauan Dashboard:** Endpoint statistik _real-time_ untuk merender grafik atau angka ringkasan di halaman utama.
+3. **Eksekusi Sekali Klik (Shortcut):** Kemampuan untuk mengubah parameter dan langsung menjalankan _Job_ dalam satu panggilan API.
+4. **Pemantauan Dashboard:** Endpoint statistik _real-time_ untuk merender grafik atau angka ringkasan di halaman utama.
 
 ---
 
@@ -36,7 +35,6 @@ Metode `target_url` digunakan apabila pengguna ingin mengekstrak data dari satu 
    - Pengguna berinteraksi dengan pratinjau (preview) web tersebut: menggeser kursor dan **mengklik (point-and-click)** persis elemen data (teks/tabel/judul) mana yang mau diambil.
    - Frontend menangkap klik tersebut, secara otomatis men-generate teks *CSS Selector* (misal: `table#data > tr > td`), lalu menyimpannya. 
    - Frontend akan mengirim JSON ke backend dengan tipe ekstraksi `"technique": "css"` dan kolom `"selector": "hasil-generate-klik-tadi"`. Pengguna sama sekali tidak menyadari bahwa ia telah "mengkoding" sintaks CSS.
-3. *Catatan Kredensial:* Jika web target mengharuskan *login* sebelum datanya bisa di-*scrape*, user sebelumnya harus menyimpan *Cookie* login-nya di menu `POST /secrets` lalu Frontend menyisipkan `secret_reference` ke form konfigurasi ini.
 
 ---
 
@@ -87,8 +85,7 @@ Semua request wajib menyertakan header:
       "method_code": "google_search",
       "status": "active",
       "parameters": [
-        { "parameter_name": "query", "parameter_value": "Pertanian Sulut" },
-        { "parameter_name": "auth_type", "parameter_value": "none" }
+        { "parameter_name": "query", "parameter_value": "Pertanian Sulut" }
       ]
     }
     ```
@@ -122,8 +119,7 @@ Semua request wajib menyertakan header:
 
 1. **State Polling:** Backend Golang mengeksekusi Job di *background* (asynchronous). Ketika FE menembak `POST /configs/:id/run`, status job adalah `pending`. Terapkan fungsi `setInterval` di React/Vue Anda untuk memanggil `GET /jobs/:job_id` setiap 3-5 detik sampai status berubah menjadi `success` atau `failed`, baru tampilkan hasilnya.
 2. **Dynamic UI:** Gunakan array parameter dari `GET /methods` untuk merender komponen form input secara looping. Jangan meng-*hardcode* form. Jika Backend kelak menambahkan metode baru (misalnya "Twitter Scraper"), UI Anda akan otomatis menyesuaikan tanpa perlu deploy ulang.
-3. **Pencegahan Error Kredensial:** Di dalam konfigurasi, jika `auth_type` tidak sama dengan `none`, FE harus memastikan user memilih *Secret ID* dari daftar `GET /secrets` untuk dimasukkan ke parameter `secret_reference`.
-4. **Data Ekspor (Excel/CSV):** Backend mereturn data hasil ekstraksi mentah dalam bentuk JSON (`results[].result_json`). Gunakan pustaka _Frontend_ (seperti `SheetJS` atau `xlsx` di NPM) untuk mengubah array JSON tersebut menjadi file tabel yang bisa diunduh langsung oleh pengguna.
+3. **Data Ekspor (Excel/CSV):** Backend mereturn data hasil ekstraksi mentah dalam bentuk JSON (`results[].result_json`). Gunakan pustaka _Frontend_ (seperti `SheetJS` atau `xlsx` di NPM) untuk mengubah array JSON tersebut menjadi file tabel yang bisa diunduh langsung oleh pengguna.
 
 ---
 
@@ -141,12 +137,7 @@ Untuk membangun aplikasi web yang lengkap berdasarkan API Backend di atas, tim F
 - **Komponen:** 4 Kartu Angka (Card Metrics) dan tabel aktivitas terakhir.
 - **Aksi:** Memanggil `GET /dashboard/summary` untuk merender jumlah `RunningJobs`, `SuccessfulJobs`, `FailedJobs`, dan `ActiveWorkers`. Jika user adalah Admin, sediakan menu tambahan di sidebar untuk "Manajemen User".
 
-### C. Halaman Secrets Vault (Manajemen Kredensial)
-- **Tujuan:** Tempat user menyimpan API Key, Token, atau Cookie rahasia mereka agar dapat dipakai berulang-ulang di berbagai konfigurasi.
-- **Komponen:** Tabel daftar secret (menampilkan nama dan tipe, **jangan pernah** menampilkan `secret_value` kembali di tabel), tombol "Tambah Secret Baru", dan tombol Hapus.
-- **Aksi:** Memanggil `GET /secrets` (tabel) dan `POST /secrets` (saat menambah kunci baru).
-
-### D. Halaman Konfigurasi Scraping (Configs & Schedules)
+### C. Halaman Konfigurasi Scraping (Configs & Schedules)
 - **Tujuan:** Inti (Core) dari aplikasi. Tempat user mendefinisikan apa yang mau mereka scrape dan jadwalnya.
 - **Komponen:** 
   1. Daftar konfigurasi (Tabel berisi Nama Config, Metode, Status).
@@ -157,12 +148,12 @@ Untuk membangun aplikasi web yang lengkap berdasarkan API Backend di atas, tim F
   3. Form penjadwalan (Scheduler) dengan dropdown pilihan waktu (Harian, Mingguan, dsb yang dikonversi ke Cron).
 - **Aksi:** Memanggil `POST /configs`, `POST /schedules`, dan menyambungkan data dari `GET /methods`.
 
-### E. Halaman Daftar Riwayat Job (Jobs History)
+### D. Halaman Daftar Riwayat Job (Jobs History)
 - **Tujuan:** Menampilkan riwayat eksekusi (seperti *Inbox* hasil scraping).
 - **Komponen:** Tabel dengan paginasi berisi ID Job, Nama Config, Status (Pill Badge: Success/Failed/Pending), Waktu Mulai, Waktu Selesai.
 - **Aksi:** Memanggil `GET /jobs?limit=15&page={currentPage}`. Memberikan tautan klik untuk melihat detail pada setiap baris.
 
-### F. Halaman Detail Job (Hasil, Logs, & Downloader)
+### E. Halaman Detail Job (Hasil, Logs, & Downloader)
 - **Tujuan:** Tempat pengguna melihat secara detail apa yang terjadi pada satu sesi scraping dan mengambil hasilnya.
 - **Komponen:** 
   1. **Status Header:** Menampilkan info job.

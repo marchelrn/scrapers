@@ -21,12 +21,11 @@ func (h *MethodController) GetAll(c *gin.Context) {
 	var res []map[string]interface{}
 	for _, m := range methods {
 		res = append(res, map[string]interface{}{
-			"code":              m.Code(),
-			"name":              m.Name(),
-			"description":       m.Description(),
-			"version":           m.Version(),
-			"parameters":        m.ParameterDefinitions(),
-			"auth_capabilities": m.AuthenticationCapabilities(),
+			"code":        m.Code(),
+			"name":        m.Name(),
+			"description": m.Description(),
+			"version":     m.Version(),
+			"parameters":  m.ParameterDefinitions(),
 		})
 	}
 

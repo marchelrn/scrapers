@@ -111,39 +111,32 @@ export interface Schedule {
   cron_expression: string
   timezone: string
   enabled: boolean
+  /** true: dijalankan sekali pada waktu cocok berikutnya, lalu nonaktif sendiri */
+  run_once: boolean
   next_run?: string
+  /** Waktu eksekusi jadwal sekali-jalan yang sudah terpakai */
+  last_run?: string
 }
 export interface CreateScheduleRequest {
   config_id: string
   cron_expression: string
   timezone?: string
   enabled?: boolean
+  run_once?: boolean
 }
 export interface UpdateScheduleRequest {
   cron_expression?: string
   timezone?: string
   enabled?: boolean
-}
-
-// ─── Secrets ─────────────────────────────────────────────────────────────────
-export type SecretType = 'api_key' | 'bearer_token' | 'basic_auth' | 'cookie'
-export interface Secret {
-  id: string
-  name: string
-  description?: string
-  secret_type: SecretType
-  created_by: string
-  created_at: string
-  updated_at: string
-}
-export interface CreateSecretRequest {
-  name: string
-  description?: string
-  secret_type: SecretType
-  secret_value: string
+  run_once?: boolean
 }
 
 // ─── Methods (Registry) ───────────────────────────────────────────────────────
+export interface ParameterOption {
+  label: string
+  value: string
+}
+
 export interface MethodParam {
   Name?: string
   name?: string
@@ -159,14 +152,19 @@ export interface MethodParam {
   placeholder?: string
   Description?: string
   description?: string
+  Options?: ParameterOption[]
+  options?: ParameterOption[]
 }
 export interface Method {
   code: string
   name: string
   description?: string
   version?: string
+  category?: string
+  author?: string
+  icon?: string
+  tags?: string[]
   parameters?: MethodParam[]
-  auth_capabilities?: string[]
 }
 
 // ─── Generic API response ────────────────────────────────────────────────────

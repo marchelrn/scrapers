@@ -19,7 +19,6 @@ type ScrapingJobService struct {
 	logRepo         contract.ScrapingLogRepository
 	resultRepo      contract.ScrapingResultRepository
 	configRepo      contract.ScrapingConfigRepository
-	secretRepo      contract.SecretRepository
 	configParamRepo contract.ConfigParameterRepository
 }
 
@@ -28,7 +27,6 @@ func ImplScrapingJobService(
 	logRepo contract.ScrapingLogRepository,
 	resultRepo contract.ScrapingResultRepository,
 	configRepo contract.ScrapingConfigRepository,
-	secretRepo contract.SecretRepository,
 	configParamRepo contract.ConfigParameterRepository,
 ) contract.ScrapingJobService {
 	return &ScrapingJobService{
@@ -36,7 +34,6 @@ func ImplScrapingJobService(
 		logRepo:         logRepo,
 		resultRepo:      resultRepo,
 		configRepo:      configRepo,
-		secretRepo:      secretRepo,
 		configParamRepo: configParamRepo,
 	}
 }
@@ -351,47 +348,18 @@ func (s *ScrapingJobService) executeJobAsync(jobID string, config *models.Scrapi
 		}
 	}
 
-	// Resolve secret_reference if present
-	if secretID, ok := params["secret_reference"]; ok && secretID != "" {
-		if sidStr, isStr := secretID.(string); isStr {
-			// Get secret (bypassing ownership check since this is internal execution)
-			// But ideally we should ensure the config owner owns the secret.
-			// Let's use the config creator ID to fetch it safely.
-			creatorID := ""
-			if config.CreatedBy != nil {
-				creatorID = *config.CreatedBy
-			}
-
-			secret, err := s.secretRepo.GetByID(sidStr, creatorID, models.UserRoleOperator)
-			if err != nil {
-				// Fallback to admin if config owner is missing or something
-				secret, err = s.secretRepo.GetByID(sidStr, "", models.UserRoleAdmin)
-			}
-
-			if err == nil && secret != nil {
-				// Inject the resolved secret value into the params for the worker
-				// Clean the secret from accidental quotes or spaces that user might have pasted into DB
-				cleanSecret := strings.TrimSpace(secret.SecretValue)
-				cleanSecret = strings.Trim(cleanSecret, `"`)
-				cleanSecret = strings.Trim(cleanSecret, `'`)
-
-				params["_resolved_secret_value"] = cleanSecret
-				params["_resolved_secret_type"] = secret.SecretType
-			} else {
-				s.AddLog(jobID, dto.CreateScrapingLogRequest{
-					Level:   models.ScrapingLogLevelWarn,
-					Message: "Failed to resolve secret_reference: " + sidStr,
-				})
-			}
-		}
-	}
-
 	// Run command using registry method with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
 	workerResult, err := method.Execute(ctx, params)
 	now = time.Now()
+
+	// Catatan non-fatal dari worker dicatat lebih dahulu, baik job berhasil maupun
+	// gagal. Inilah yang menjelaskan kepada operator mengapa sebuah domain
+	// memperlambat kita, mengapa selector jatuh ke tag dasar, atau mengapa jumlah
+	// hasil lebih sedikit dari harapan.
+	s.logWorkerWarnings(jobID, workerResult)
 
 	if err != nil || workerResult.Status != "success" {
 		statusFailed := models.JobStatusFailed
@@ -406,7 +374,14 @@ func (s *ScrapingJobService) executeJobAsync(jobID string, config *models.Scrapi
 		} else if err != nil {
 			errorMsg = "Execution error: " + err.Error()
 		} else if workerResult != nil && workerResult.Error != nil {
-			errorMsg = "Worker error: " + workerResult.Error.Message
+			// Kode kesalahan ikut dicatat agar operator dapat membedakan
+			// "selector saya salah" (SELECTOR_NOT_FOUND) dari "situs menolak kita"
+			// (BLOCKED_403, RATE_LIMITED_429, CHALLENGE_DETECTED, CIRCUIT_OPEN).
+			code := workerResult.Error.Code
+			if code == "" {
+				code = "EXECUTION_ERROR"
+			}
+			errorMsg = "Worker error [" + code + "]: " + workerResult.Error.Message
 		}
 
 		s.AddLog(jobID, dto.CreateScrapingLogRequest{
@@ -440,4 +415,21 @@ func (s *ScrapingJobService) executeJobAsync(jobID string, config *models.Scrapi
 		Level:   models.ScrapingLogLevelInfo,
 		Message: "Execution finished successfully",
 	})
+}
+
+// logWorkerWarnings menyalin metadata.warnings dari worker Python menjadi log job
+// bertingkat WARN sehingga terlihat pada halaman detail job.
+func (s *ScrapingJobService) logWorkerWarnings(jobID string, workerResult *dto.WorkerResult) {
+	if workerResult == nil {
+		return
+	}
+	for _, warning := range workerResult.Metadata.Warnings {
+		if warning == "" {
+			continue
+		}
+		s.AddLog(jobID, dto.CreateScrapingLogRequest{
+			Level:   models.ScrapingLogLevelWarn,
+			Message: "Catatan worker: " + warning,
+		})
+	}
 }

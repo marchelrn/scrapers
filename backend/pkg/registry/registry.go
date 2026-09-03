@@ -14,7 +14,6 @@ type ScrapingMethod interface {
 	Description() string
 	Version() string
 	ParameterDefinitions() []ParameterDefinition
-	AuthenticationCapabilities() []string
 
 	// Validate checks if the provided configuration parameters are valid.
 	Validate(params map[string]interface{}) error

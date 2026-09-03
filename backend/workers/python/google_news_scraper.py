@@ -1,5 +1,6 @@
 import warnings
 import logging
+import json
 import re
 import os
 import urllib.parse
@@ -12,6 +13,10 @@ logging.getLogger().setLevel(logging.ERROR)
 
 import requests
 from bs4 import BeautifulSoup
+
+import fetcher
+import net_policy
+from scraper_errors import ContentTypeError, ScraperError, ValidationError
 
 try:
     from newspaper import Article
@@ -27,6 +32,10 @@ except ImportError:
 
 MAX_ARTICLE_TEXT_LENGTH = 15000
 TIMEOUT = 15
+# Jumlah artikel yang diambil bersamaan. Nilainya kecil dengan sengaja: jeda per
+# domain di net_policy sudah menyerialkan penerbit yang sama, jadi konkurensi
+# tinggi hanya menambah beban tanpa mempercepat apa pun.
+ARTICLE_WORKERS = int(os.environ.get("SCRAPER_ARTICLE_WORKERS", "") or 3)
 
 INDONESIAN_STOPWORDS = {
     "yang", "di", "dari", "dan", "itu", "dengan", "ke", "adalah", "ini", "untuk", 
@@ -87,31 +96,156 @@ def _clean_text(text):
     clean = re.sub(r'[\u200b\u200e\u200f\u2028\u202a-\u202e\u2060-\u206f\ufff0-\uffff]', '', clean)
     return clean.strip()
 
+# ---------------------------------------------------------------------------
+# Penerjemahan tautan Google News
+# ---------------------------------------------------------------------------
+# Tautan pada feed RSS Google News berbentuk
+# https://news.google.com/rss/articles/CBMi<base64 opaque>. Format lama masih
+# dapat dibaca langsung dari base64-nya, tetapi format baru (AU_yqL...) tidak
+# memuat URL penerbit sama sekali -- ia hanya sebuah pengenal yang harus
+# ditukarkan lewat endpoint yang dipakai klien Google News sendiri.
+#
+# Tanpa penerjemahan ini, real_url tetap menunjuk ke news.google.com, sehingga
+# yang diekstrak justru halaman pembungkus milik Google -- itulah sebab semua
+# artikel sebelumnya berjudul "Google Berita" dan isinya kosong.
+GNEWS_DECODE_TIMEOUT = float(os.environ.get("SCRAPER_GNEWS_DECODE_TIMEOUT", "") or 12.0)
+GNEWS_BATCH_URL = "https://news.google.com/_/DotsSplashUi/data/batchexecute"
+_GNEWS_ARTICLE_RE = re.compile(r"/(?:rss/)?articles/([A-Za-z0-9_\-]{20,})")
+_GNEWS_CACHE_NAME = "gnews_urls.json"
+
+
+def _gnews_article_id(url):
+    match = _GNEWS_ARTICLE_RE.search(urllib.parse.urlsplit(url).path)
+    return match.group(1) if match else ""
+
+
+def _gnews_cache_path():
+    return os.path.join(net_policy.state_dir(), _GNEWS_CACHE_NAME)
+
+
+def _gnews_cache_read():
+    try:
+        with open(_gnews_cache_path(), "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _gnews_cache_get(article_id):
+    return _gnews_cache_read().get(article_id) or ""
+
+
+def _gnews_cache_put(article_id, resolved):
+    """Simpan hasil penerjemahan; pengenal artikel bersifat tetap sehingga aman
+    di-cache selamanya. Ini menekan dua permintaan ke news.google.com per artikel
+    menjadi nol pada eksekusi berikutnya."""
+    path = _gnews_cache_path()
+    try:
+        with net_policy._FileLock(path + ".lock"):
+            data = _gnews_cache_read()
+            data[article_id] = resolved
+            # Batasi pertumbuhan berkas: sisakan entri termuda.
+            if len(data) > 5000:
+                data = dict(list(data.items())[-4000:])
+            tmp = path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as handle:
+                json.dump(data, handle)
+            os.replace(tmp, path)
+    except OSError:
+        pass
+
+
+def _gnews_batch_payload(article_id, timestamp, signature):
+    inner = [
+        "garturlreq",
+        [["X", "X", ["X", "X"], None, None, 1, 1, "US:en", None, 1,
+          None, None, None, None, None, 0, 1],
+         "X", "X", 1, [1, 1, 1], 1, 1, None, 0, 0, None, 0],
+        article_id,
+        timestamp,
+        signature,
+    ]
+    return urllib.parse.urlencode(
+        {"f.req": json.dumps([[["Fbv4je", json.dumps(inner)]]])})
+
+
+def _decode_via_batchexecute(url, article_id):
+    page = fetcher.fetch(url, expect="any", use_cache=False, max_attempts=1,
+                         timeout=GNEWS_DECODE_TIMEOUT)
+    html = page.text
+    signature = re.search(r'data-n-a-sg="([^"]+)"', html)
+    stamp = re.search(r'data-n-a-ts="([^"]+)"', html)
+    if not (signature and stamp):
+        return ""
+
+    response = fetcher.fetch(
+        GNEWS_BATCH_URL, method="POST",
+        data=_gnews_batch_payload(article_id, int(stamp.group(1)), signature.group(1)),
+        headers={"Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"},
+        expect="any", use_cache=False, max_attempts=1, timeout=GNEWS_DECODE_TIMEOUT)
+
+    # Balasan batchexecute didahului baris penjaga anti-XSSI, jadi baris pertama
+    # dilewati bila ada.
+    lines = [line for line in response.text.split("\n") if line.strip()]
+    for line in reversed(lines):
+        if not line.lstrip().startswith("["):
+            continue
+        try:
+            envelope = json.loads(line)
+            resolved = json.loads(envelope[0][2])[1]
+        except (ValueError, IndexError, TypeError, KeyError):
+            continue
+        if isinstance(resolved, str) and resolved.startswith("http"):
+            return resolved
+    return ""
+
+
 def _resolve_google_news_link(url):
-    """Decodes Google News RSS link to obtain original publisher URL."""
+    """Ubah tautan pengalih Google News menjadi URL penerbit aslinya.
+
+    Permintaan disalurkan lewat fetcher.py agar jeda per domain, robots.txt, dan
+    deteksi blokir tetap berlaku. Gagal resolusi bukan hal fatal: tautan RSS asli
+    masih dapat dipakai sebagai identitas artikel.
+    """
+    article_id = _gnews_article_id(url)
+
+    if article_id:
+        cached = _gnews_cache_get(article_id)
+        if cached:
+            return cached
+
     if DECODER_AVAILABLE:
         try:
             decoded = gnewsdecoder(url, interval=1)
             if decoded.get("status") and decoded.get("decoded_url"):
+                if article_id:
+                    _gnews_cache_put(article_id, decoded["decoded_url"])
                 return decoded["decoded_url"]
         except Exception:
             pass
 
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
-    try:
-        r = requests.head(url, headers=headers, allow_redirects=True, timeout=TIMEOUT)
-        if r.url and "news.google.com" not in r.url:
-            return r.url
-    except Exception:
-        pass
+    if article_id:
+        try:
+            resolved = _decode_via_batchexecute(url, article_id)
+        except ScraperError:
+            resolved = ""
+        if resolved:
+            _gnews_cache_put(article_id, resolved)
+            return resolved
 
-    try:
-        r = requests.get(url, headers=headers, allow_redirects=True, timeout=TIMEOUT)
-        return r.url
-    except Exception:
-        return url
+    # Tautan lama masih menjawab dengan pengalihan HTTP biasa.
+    for method in ("HEAD", "GET"):
+        try:
+            result = fetcher.fetch(url, method=method, allow_redirects=True,
+                                   expect="any", use_cache=False, max_attempts=1)
+        except ScraperError:
+            continue
+        if result.url and "news.google.com" not in result.url:
+            if article_id:
+                _gnews_cache_put(article_id, result.url)
+            return result.url
+    return url
 
 def _split_into_sentences(text):
     text = re.sub(r'\s+', ' ', text)
@@ -263,15 +397,12 @@ def _classify_category(title, text, query=""):
 def search_google_news_rss(query, max_results=15):
     encoded_query = urllib.parse.quote(query)
     url = f"https://news.google.com/rss/search?q={encoded_query}&hl=id&gl=ID&ceid=ID:id"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
+    # Kegagalan di sini sengaja dibiarkan naik ke pemanggil: bila feed Google News
+    # sendiri tidak dapat diambil, job harus melaporkan alasannya, bukan
+    # mengembalikan daftar kosong yang terlihat seperti "tidak ada berita".
+    response = fetcher.fetch(url, expect="any")
 
     try:
-        response = requests.get(url, headers=headers, timeout=TIMEOUT)
-        if response.status_code != 200:
-            return []
-
         root = ET.fromstring(response.content)
         articles = []
         for item in root.findall(".//item")[:max_results]:
@@ -292,8 +423,9 @@ def search_google_news_rss(query, max_results=15):
                 "source_name": source
             })
         return articles
-    except Exception:
-        return []
+    except ET.ParseError as exc:
+        raise ContentTypeError(
+            "Balasan Google News bukan feed RSS yang valid: %s" % exc, url=url)
 
 def _extract_article_content(item):
     rss_link = item.get("link", "")
@@ -302,22 +434,44 @@ def _extract_article_content(item):
     query = item.get("_query", "")
 
     real_url = _resolve_google_news_link(rss_link)
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-        "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
-    }
 
     extracted_text = ""
     article_title = raw_title
     status = "rss_extracted"
     is_fallback = False
+    error_code = None
 
-    if NEWSPAPER_AVAILABLE:
+    # Satu penerbit yang memblokir kita tidak boleh menggagalkan seluruh job --
+    # judul dari RSS masih berguna sebagai catatan fenomena. Tetapi ALASAN
+    # kegagalannya dicatat, supaya IPDS bisa melihat domain mana yang menolak
+    # sistem ini alih-alih menebak-nebak.
+    html = ""
+    if "news.google.com" in (net_policy.domain_of(real_url) or ""):
+        # Penerjemahan tautan gagal. Mengambil real_url di sini berarti mengunduh
+        # halaman pembungkus milik Google -- judulnya "Google Berita", isinya
+        # kosong, dan permintaannya sia-sia. Lebih baik jujur memakai cuplikan RSS.
+        error_code = "GNEWS_UNRESOLVED"
+        net_policy.add_warning(
+            "Sebagian tautan Google News tidak dapat diterjemahkan ke URL penerbit, "
+            "sehingga hanya cuplikan RSS yang tersedia (contoh: %s)." % rss_link,
+            key="gnews-unresolved")
+    else:
         try:
-            article = Article(real_url, language='id', request_timeout=TIMEOUT)
-            article.config.headers = headers
-            article.download()
+            response = fetcher.fetch(real_url, expect="html")
+            html = response.text
+        except ScraperError as exc:
+            error_code = exc.code
+            failing_domain = net_policy.domain_of(real_url) or real_url
+            net_policy.add_warning(
+                "%s: %s" % (failing_domain, exc.public_message()),
+                key="publisher:%s:%s" % (failing_domain, exc.code))
+
+    if html and NEWSPAPER_AVAILABLE:
+        try:
+            article = Article(real_url, language='id')
+            # HTML disuplai dari fetcher, tidak diunduh ulang oleh newspaper,
+            # agar tidak ada jalur jaringan yang lolos dari kebijakan kesopanan.
+            article.set_html(html)
             article.parse()
 
             if article.text and article.text.strip():
@@ -327,11 +481,17 @@ def _extract_article_content(item):
         except Exception:
             extracted_text = ""
 
-    if not extracted_text:
+    if html and not extracted_text:
         try:
-            resp = requests.get(real_url, headers=headers, timeout=TIMEOUT)
-            if resp.status_code == 200:
-                soup = BeautifulSoup(resp.content, 'html.parser')
+            soup = BeautifulSoup(html, 'html.parser')
+
+            # Judul dari RSS Google News sudah berupa headline ("Judul - Penerbit"
+            # yang sudah dibersihkan), sehingga tag <title> halaman penerbit hanya
+            # dipakai bila RSS tidak memberi judul. Menimpanya justru merusak:
+            # banyak portal menaruh nama situs di awal ("InfoPublik - ...") atau
+            # memakai <title> generik, sehingga judul artikel berubah menjadi nama
+            # situs.
+            if not article_title:
                 title_tag = soup.find('title')
                 if title_tag and title_tag.text:
                     t_text = title_tag.text.strip()
@@ -340,14 +500,17 @@ def _extract_article_content(item):
                     if t_text:
                         article_title = t_text
 
-                paragraphs = soup.find_all('p')
-                extracted_text = "\n\n".join([p.text.strip() for p in paragraphs if len(p.text.strip()) > 35])
+            paragraphs = soup.find_all('p')
+            extracted_text = "\n\n".join(
+                [p.text.strip() for p in paragraphs if len(p.text.strip()) > 35])
         except Exception:
-            pass
+            extracted_text = ""
 
     extracted_text = _clean_text(extracted_text)
 
-    # Fallback to RSS title / snippet metadata if site blocks HTML scraping (e.g. 403 Forbidden / Cloudflare / WAF)
+    # Fallback ke judul/snippet RSS bila isi artikel tidak bisa diambil (403,
+    # Cloudflare, WAF, atau situs sedang bermasalah). Kode error disertakan agar
+    # operator tahu ini bukan "berita tanpa isi", tetapi penolakan dari penerbit.
     if not extracted_text:
         extracted_text = raw_title
         status = "rss_snippet_fallback"
@@ -370,7 +533,8 @@ def _extract_article_content(item):
         "category": category,
         "published_date": pub_date,
         "extraction_status": status,
-        "is_fallback": is_fallback
+        "is_fallback": is_fallback,
+        "error_code": error_code
     }
 
 def scrape(config_params):
@@ -385,7 +549,7 @@ def scrape(config_params):
     """
     query = config_params.get("query") or config_params.get("keyword")
     if not query:
-        raise ValueError("Missing 'query' or 'keyword' parameter")
+        raise ValidationError("Parameter 'query' atau 'keyword' wajib diisi.")
 
     domain_filter = config_params.get("domain_filter", "")
     if domain_filter:
@@ -409,8 +573,15 @@ def scrape(config_params):
             if isinstance(u, str) and u:
                 previously_scraped_urls.add(u.strip().rstrip('/'))
 
-    # Fetch Google News RSS candidate pool (fetch 3x requested max_results to compensate for filtered items)
-    candidate_pool_size = max(max_results * 3, 15)
+    # Kolam kandidat. Pelipatan tiga hanya diperlukan ketika penyaringan AI aktif,
+    # karena penyaring itu membuang sebagian artikel. Tanpa instruksi AI, satu-satunya
+    # penyaring adalah deduplikasi, sehingga melipatgandakan kolam berarti mengunduh
+    # belasan artikel yang tidak akan pernah dipakai -- beban sia-sia bagi penerbit
+    # dan sumber pemblokiran yang paling mudah dihindari.
+    if config_params.get("ai_instruction"):
+        candidate_pool_size = max(max_results * 3, 15)
+    else:
+        candidate_pool_size = max_results + 3
     rss_items = search_google_news_rss(query, max_results=candidate_pool_size + len(previously_scraped_urls) + 5)
     if not rss_items:
         return []
@@ -430,7 +601,7 @@ def scrape(config_params):
 
     # Parallel extraction
     final_results = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=ARTICLE_WORKERS) as executor:
         futures = {executor.submit(_extract_article_content, item): item for item in items}
         for future in concurrent.futures.as_completed(futures):
             try:

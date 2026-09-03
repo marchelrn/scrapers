@@ -6,7 +6,7 @@ import { configsApi } from '../api/configs' // Pastikan API untuk config di-impo
 import type { DashboardSummary, ScrapingJob, ScrapingConfig } from '../types'
 import {
   Activity, PlayCircle, CheckCircle2, XCircle, Clock,
-  Cpu, Calendar, ArrowUpRight, RefreshCw
+  Cpu, Calendar, ArrowUpRight, RefreshCw, Eye
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
@@ -175,33 +175,49 @@ export function DashboardPage() {
 
           {/* Recent Jobs Table */}
           <div className="card overflow-hidden">
-            <div className="p-5 border-b border-surface-700 flex items-center justify-between">
+            <div className="p-5 border-b border-surface-700 flex items-center justify-between gap-4">
               <div>
                 <h3 className="text-base font-bold text-white">Job Terbaru</h3>
+                <p className="text-xs text-gray-400 mt-0.5">5 eksekusi scraping terakhir</p>
               </div>
-              <Link to="/jobs" className="btn-ghost text-xs text-brand-400 hover:text-brand-300">
+              <Link to="/jobs" className="btn-ghost text-xs text-brand-400 hover:text-brand-300 shrink-0">
                 <span>Lihat Semua</span>
                 <ArrowUpRight className="w-3.5 h-3.5" />
               </Link>
             </div>
 
             <div className="table-wrap">
-              <table className="table">
+              <table className="table table-fixed min-w-[680px]">
+                <colgroup>
+                  <col className="w-[30%]" /> {/* Nama */}
+                  <col className="w-[15%]" /> {/* Status */}
+                  <col className="w-[20%]" /> {/* Mulai */}
+                  <col className="w-[20%]" /> {/* Selesai */}
+                  <col className="w-[10%]" /> {/* Aksi */}
+                </colgroup>
                 <thead>
+
                 <tr>
                   <th>Nama</th>
-                  <th>ID Job</th>
-                  <th>Config ID</th>
-                  <th>Worker</th>
+                  {/*<th>ID Job</th>*/}
+                  {/*<th>Config ID</th>*/}
+                  {/*<th>Worker</th>*/}
                   <th>Status</th>
                   <th>Waktu Mulai</th>
-                  <th>Aksi</th>
+                  <th>Waktu Selesai</th>
+                  <th className="text-center">Aksi</th>
                 </tr>
                 </thead>
                 <tbody>
-                {recentJobs.length === 0 ? (
+                {loading ? (
                     <tr>
-                      <td colSpan={7} className="text-center py-8 text-gray-500 text-xs">
+                      <td colSpan={4} className="text-center py-8 text-gray-500 text-xs">
+                        Memuat job terbaru...
+                      </td>
+                    </tr>
+                ) : recentJobs.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="text-center py-8 text-gray-500 text-xs">
                         Belum ada riwayat job scraping.
                       </td>
                     </tr>
@@ -212,23 +228,29 @@ export function DashboardPage() {
 
                       return (
                           <tr key={j.id}>
-                            {/* 3. Tampilkan property nama (misal: config.na atau config.name) */}
-                            <td className="font-mono text-xs text-brand-300">
+                            <td
+                                className="font-medium text-xs text-white truncate"
+                                title={config?.name || 'Config Tanpa Nama'}
+                            >
                               {config?.name || 'Config Tanpa Nama'}
                             </td>
-                            <td className="font-mono text-xs text-brand-300">{j.id.substring(0, 5)}...</td>
-                            <td className="font-mono text-xs text-gray-400">{j.config_id.substring(0, 5)}...</td>
-                            <td className="text-xs text-gray-300">{j.worker_name || 'Worker Python'}</td>
-                            <td>{getStatusBadge(j.status)}</td>
-                            <td className="text-xs text-gray-400">
+                            {/*<td className="font-mono text-xs text-brand-300">{j.id.substring(0, 5)}...</td>*/}
+                            {/*<td className="font-mono text-xs text-gray-400">{j.config_id.substring(0, 5)}...</td>*/}
+                            {/*<td className="text-xs text-gray-300">{j.worker_name || 'Worker Python'}</td>*/}
+                            <td className="whitespace-nowrap">{getStatusBadge(j.status)}</td>
+                            <td className="text-xs text-gray-400 whitespace-nowrap">
                               {j.started_at ? new Date(j.started_at).toLocaleString('id-ID') : '-'}
                             </td>
-                            <td>
+                            <td className="text-xs text-gray-400">
+                              {j.finished_at ? new Date(j.finished_at).toLocaleString('id-ID') : '-'}
+                            </td>
+                            <td className="text-right">
                               <Link
                                   to={`/jobs/${j.id}`}
-                                  className="btn-ghost btn-sm text-brand-400 hover:text-brand-300"
+                                  className="btn-ghost btn-sm text-brand-400 hover:text-brand-300 inline-flex items-center gap-1"
                               >
-                                Detail
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>Detail</span>
                               </Link>
                             </td>
                           </tr>

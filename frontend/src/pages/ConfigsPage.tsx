@@ -2,15 +2,14 @@ import { useEffect, useState } from 'react'
 import { Header } from '../components/layout/Header'
 import { configsApi } from '../api/configs'
 import { methodsApi } from '../api/methods'
-import { secretsApi } from '../api/secrets'
 import { schedulesApi } from '../api/schedules'
-import type { ScrapingConfig, Method, Secret, Schedule } from '../types'
+import type { ScrapingConfig, Method, Schedule } from '../types'
 import { VisualSelectorModal } from '../components/shared/VisualSelectorModal'
 import { LowCodeSchedulePicker } from '../components/shared/LowCodeSchedulePicker'
 import { UpdateConfigModal } from '../components/shared/UpdateConfigModal'
 import {
   Plus, Play, Trash2, CheckCircle, XCircle,
-  MousePointer, Loader2, KeyRound, Calendar, Lock, Edit3
+  MousePointer, Loader2, Calendar, Edit3
 } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
@@ -19,7 +18,6 @@ export function ConfigsPage() {
   const navigate = useNavigate()
   const [configs, setConfigs] = useState<ScrapingConfig[]>([])
   const [methods, setMethods] = useState<Method[]>([])
-  const [secrets, setSecrets] = useState<Secret[]>([])
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -36,10 +34,6 @@ export function ConfigsPage() {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [methodCode, setMethodCode] = useState('target_url')
-
-  // Auth Vault Integration State
-  const [authType, setAuthType] = useState('none')
-  const [secretReference, setSecretReference] = useState('')
 
   // Target URL UX Options
   const [targetUrlUX, setTargetUrlUX] = useState<'keyword' | 'visual'>('keyword')
@@ -58,18 +52,17 @@ export function ConfigsPage() {
   // Schedule Modal Form State
   const [cronExpression, setCronExpression] = useState('0 0 * * *')
   const [scheduleTimezone, setScheduleTimezone] = useState('Asia/Makassar')
+  const [scheduleRunOnce, setScheduleRunOnce] = useState(false)
 
   const fetchInitialData = async () => {
     try {
-      const [cfgs, meths, secs, schs] = await Promise.all([
+      const [cfgs, meths, schs] = await Promise.all([
         configsApi.getAll(),
         methodsApi.getAll().catch(() => []),
-        secretsApi.getAll().catch(() => []),
         schedulesApi.getAll().catch(() => []),
       ])
       setConfigs(cfgs || [])
       setMethods(meths || [])
-      setSecrets(secs || [])
       setSchedules(schs || [])
     } catch {
       toast.error('Gagal memuat data awal konfigurasi')
@@ -142,12 +135,6 @@ export function ConfigsPage() {
         }
       }
 
-      // Add auth parameter if specified
-      paramsPayload.push({ parameter_name: 'auth_type', parameter_value: authType })
-      if (authType !== 'none' && secretReference) {
-        paramsPayload.push({ parameter_name: 'secret_reference', parameter_value: secretReference })
-      }
-
       await configsApi.create({
         name,
         description: description || undefined,
@@ -194,11 +181,34 @@ export function ConfigsPage() {
     if (existingSchedule) {
       setCronExpression(existingSchedule.cron_expression)
       setScheduleTimezone(existingSchedule.timezone || 'Asia/Makassar')
+      setScheduleRunOnce(existingSchedule.run_once)
     } else {
       setCronExpression('0 0 * * *')
       setScheduleTimezone('Asia/Makassar')
+      setScheduleRunOnce(false)
     }
     setShowScheduleModal(true)
+  }
+
+  const   handleUnassignSchedule = async (scheduleId: number) => {
+    // const confirmed = confirm(
+    //   configName
+    //     ? `Apakah Anda yakin ingin membatalkan/unassign jadwal otomatis untuk konfigurasi "${configName}"?`
+    //     : 'Apakah Anda yakin ingin membatalkan/unassign jadwal otomatis ini?'
+    // )
+    // if (!confirmed) return
+
+    setSubmitting(true)
+    try {
+      await schedulesApi.delete(scheduleId)
+      toast.success('Jadwal scheduler berhasil di-unassign / dihapus')
+      setShowScheduleModal(false)
+      fetchInitialData()
+    } catch {
+      toast.error('Gagal membatalkan jadwal')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const handleOpenUpdateModal = (config: ScrapingConfig) => {
@@ -217,6 +227,7 @@ export function ConfigsPage() {
           cron_expression: cronExpression,
           timezone: scheduleTimezone,
           enabled: true,
+          run_once: scheduleRunOnce,
         })
       } else {
         await schedulesApi.create({
@@ -224,6 +235,7 @@ export function ConfigsPage() {
           cron_expression: cronExpression,
           timezone: scheduleTimezone,
           enabled: true,
+          run_once: scheduleRunOnce,
         })
       }
       toast.success('Jadwal scraping otomatis berhasil disimpan!')
@@ -239,7 +251,6 @@ export function ConfigsPage() {
   const getMethodNameLabel = (code: string) => {
     const found = methods.find((m) => m.code === code)
     if (found) return found.name
-    if (code === 'google_search') return 'Web Search (News)'
     if (code === 'google_news') return 'Google News RSS Search'
     if (code === 'target_url') return 'Target URL Scraping'
     return code
@@ -280,7 +291,7 @@ export function ConfigsPage() {
                 <thead>
                   <tr>
                     <th>Nama Konfigurasi</th>
-                    <th>Metode Blueprint</th>
+                    <th>Metode Scraping</th>
                     <th>Status</th>
                     <th>Scheduler</th>
                     {/*<th>Dibuat</th>*/}
@@ -296,7 +307,7 @@ export function ConfigsPage() {
                     </tr>
                   ) : (
                     configs.map((c) => {
-                      const hasSchedule = schedules.some((s) => s.config_id === c.id && s.enabled)
+                      const assignedSchedule = schedules.find((s) => s.config_id === c.id)
                       return (
                         <tr key={c.id} className="hover:bg-surface-800/40">
                           <td>
@@ -320,17 +331,38 @@ export function ConfigsPage() {
                             )}
                           </td>
                           <td>
-                            <button
-                              onClick={() => handleOpenScheduleModal(c)}
-                              title={hasSchedule ? 'Edit / Lihat Schedule Aktif' : 'Atur Jadwal Scraping Otomatis'}
-                              className={`text-xs inline-flex items-center gap-1.5 px-2 py-1 rounded border transition-colors ${
-                                hasSchedule
-                                  ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20'
-                                  : 'text-gray-400 border-surface-700 bg-surface-800 hover:text-gray-200'
-                              }`}
-                            >
-                              <span>{hasSchedule ? 'Aktif' : <Calendar className="w-6 h-4" />}</span>
-                            </button>
+                            {assignedSchedule ? (
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  onClick={() => handleOpenScheduleModal(c)}
+                                  title={assignedSchedule.enabled ? 'Jadwal Aktif - Klik untuk ubah' : 'Jadwal Nonaktif - Klik untuk ubah'}
+                                  className={`text-xs inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border font-medium transition-colors ${
+                                    assignedSchedule.enabled
+                                      ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20'
+                                      : 'text-amber-400 border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20'
+                                  }`}
+                                >
+                                  <Calendar className="w-3.5 h-3.5" />
+                                  <span>{assignedSchedule.enabled ? 'Aktif' : 'Nonaktif'}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleUnassignSchedule(assignedSchedule.id)}
+                                  title="Hapus Jadwal Scheduler"
+                                  className="p-1 rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-950/30 border border-surface-700 hover:border-red-500/30 transition-colors"
+                                >
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => handleOpenScheduleModal(c)}
+                                title="Atur Jadwal Scraping Otomatis"
+                                className="text-xs inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-surface-700 bg-surface-800 text-gray-400 hover:text-gray-200 hover:border-surface-600 transition-colors"
+                              >
+                                <Calendar className="w-3.5 h-3.5" />
+                                <span>Atur</span>
+                              </button>
+                            )}
                           </td>
                           {/*<td className="text-xs text-gray-400">*/}
                           {/*  {new Date(c.created_at).toLocaleDateString('id-ID')}*/}
@@ -380,7 +412,7 @@ export function ConfigsPage() {
             <div className="flex items-center justify-between border-b border-surface-700 pb-4">
               <div>
                 <h3 className="text-base font-bold text-white">Buat Konfigurasi Scraping Baru</h3>
-                <p className="text-xs text-gray-400">Dukungan dynamic form blueprint & secret vault authentication</p>
+                <p className="text-xs text-gray-400">Dukungan dynamic form blueprint dari registry metode</p>
               </div>
               <button
                 onClick={() => setShowCreateModal(false)}
@@ -425,7 +457,7 @@ export function ConfigsPage() {
                     {methods.length === 0 ? (
                       <>
                         <option value="target_url">Target URL</option>
-                        <option value="google_search">Web Search (News)</option>
+                        <option value="google_news">Google News RSS Search</option>
                       </>
                     ) : (
                       methods.map((m) => (
@@ -540,7 +572,7 @@ export function ConfigsPage() {
                     let paramsList = foundMethod?.parameters
 
                     if (!paramsList || paramsList.length === 0) {
-                      if (methodCode === 'google_search' || methodCode === 'google_news') {
+                      if (methodCode === 'google_news') {
                         paramsList = [
                           { name: 'query', label: 'Search Query', type: 'text', required: true, placeholder: 'e.g. Pertanian Sulawesi Utara 2026' },
                           { name: 'domain_filter', label: 'Domain Filter (Optional)', type: 'text', required: false, placeholder: 'e.g. bps.go.id, antaranews.com' },
@@ -573,7 +605,6 @@ export function ConfigsPage() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {paramsList.map((param: any, i: number) => {
                           const pName = param.Name || param.name || `param_${i}`
-                          if (pName === 'auth_type' || pName === 'secret_reference') return null
                           const pLabel = param.Label || param.label || pName
                           const pType = (param.Type || param.type || 'text').toLowerCase()
                           const pReq = param.Required ?? param.required ?? false
@@ -641,53 +672,6 @@ export function ConfigsPage() {
                 </div>
               )}
 
-              {/* Secret Vault & Authentication Integration */}
-              <div className="p-4 rounded-xl bg-surface-800 border border-surface-700 space-y-3">
-                <h4 className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
-                  <KeyRound className="w-3.5 h-3.5" />
-                  <span>Autentikasi & Secret Vault (Kredensial)</span>
-                </h4>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="form-group">
-                    <label className="label">Tipe Otentikasi Web</label>
-                    <select
-                      value={authType}
-                      onChange={(e) => setAuthType(e.target.value)}
-                      className="input"
-                    >
-                      <option value="none">Tanpa Login (Public Page)</option>
-                      <option value="cookie">Cookie Session</option>
-                      <option value="api_key">API Key</option>
-                      <option value="bearer_token">Bearer Token</option>
-                      <option value="basic_auth">Basic Auth</option>
-                    </select>
-                  </div>
-
-                  {authType !== 'none' && (
-                    <div className="form-group">
-                      <label className="label flex items-center gap-1">
-                        <Lock className="w-3 h-3 text-amber-400" />
-                        <span>Pilih Secret dari Vault</span>
-                      </label>
-                      <select
-                        value={secretReference}
-                        onChange={(e) => setSecretReference(e.target.value)}
-                        required={authType !== 'none'}
-                        className="input font-mono text-xs border-amber-500/40"
-                      >
-                        <option value="">-- Pilih Secret Key / Cookie --</option>
-                        {secrets.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name} ({s.secret_type})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                </div>
-              </div>
-
               <button
                 type="submit"
                 disabled={submitting}
@@ -716,44 +700,65 @@ export function ConfigsPage() {
       )}
 
       {/* Schedule Modal */}
-      {showScheduleModal && selectedConfigForSchedule && (
-        <div className="fixed inset-0 z-40 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="card w-full max-w-lg bg-surface-900 border-surface-600 shadow-2xl p-6 space-y-5 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-surface-700 pb-3">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-emerald-400" />
-                <span>Atur Jadwal Scraping Otomatis</span>
-              </h3>
-              <button onClick={() => setShowScheduleModal(false)} className="btn-ghost btn-sm text-gray-400">
-                Batal
-              </button>
+      {showScheduleModal && selectedConfigForSchedule && (() => {
+        const existingSchedule = schedules.find((s) => s.config_id === selectedConfigForSchedule.id)
+        return (
+          <div className="fixed inset-0 z-40 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="card w-full max-w-lg bg-surface-900 border-surface-600 shadow-2xl p-6 space-y-5 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between border-b border-surface-700 pb-3">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-emerald-400" />
+                  <span>{existingSchedule ? 'Edit Jadwal Scraping' : 'Atur Jadwal Scraping Otomatis'}</span>
+                </h3>
+                <button onClick={() => setShowScheduleModal(false)} className="btn-ghost btn-sm text-gray-400">
+                  Batal
+                </button>
+              </div>
+
+              <div className="space-y-1 text-xs">
+                <p className="text-gray-400">
+                  Konfigurasi: <span className="text-white font-semibold">{selectedConfigForSchedule.name}</span>
+                </p>
+              </div>
+
+              <form onSubmit={handleCreateSchedule} className="space-y-4">
+                <LowCodeSchedulePicker
+                  initialCron={cronExpression}
+                  initialTimezone={scheduleTimezone}
+                  initialRunOnce={scheduleRunOnce}
+                  onChange={(newCron, newTz, newRunOnce) => {
+                    setCronExpression(newCron)
+                    setScheduleTimezone(newTz)
+                    setScheduleRunOnce(newRunOnce)
+                  }}
+                />
+
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="btn-primary flex-1 justify-center py-2.5 text-xs font-semibold"
+                  >
+                    {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Simpan Jadwal'}
+                  </button>
+
+                  {existingSchedule && (
+                    <button
+                      type="button"
+                      onClick={() => handleUnassignSchedule(existingSchedule.id)}
+                      disabled={submitting}
+                      className="btn-danger btn-sm py-2.5 px-3 text-xs"
+                      title="Batalkan & Hapus Jadwal"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </form>
             </div>
-
-            <p className="text-xs text-gray-400">
-              Konfigurasi: <span className="text-white font-semibold">{selectedConfigForSchedule.name}</span>
-            </p>
-
-            <form onSubmit={handleCreateSchedule} className="space-y-4">
-              <LowCodeSchedulePicker
-                initialCron={cronExpression}
-                initialTimezone={scheduleTimezone}
-                onChange={(newCron, newTz) => {
-                  setCronExpression(newCron)
-                  setScheduleTimezone(newTz)
-                }}
-              />
-
-              <button
-                type="submit"
-                disabled={submitting}
-                className="btn-primary w-full justify-center py-2.5 text-xs font-semibold"
-              >
-                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Simpan Jadwal Scraping'}
-              </button>
-            </form>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* Update Config Modal Overlay */}
       <UpdateConfigModal
@@ -762,7 +767,6 @@ export function ConfigsPage() {
         onClose={() => setShowUpdateModal(false)}
         onSuccess={fetchInitialData}
         initialMethods={methods}
-        initialSecrets={secrets}
       />
     </div>
   )
