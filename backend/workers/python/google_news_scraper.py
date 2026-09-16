@@ -6,6 +6,8 @@ import os
 import urllib.parse
 import xml.etree.ElementTree as ET
 import concurrent.futures
+import datetime
+from email.utils import parsedate_to_datetime
 
 # Silence stdout warnings to protect JSON output contract
 warnings.filterwarnings('ignore')
@@ -394,6 +396,26 @@ def _classify_category(title, text, query=""):
 
     return main_query_cat
 
+def _parse_pub_date(pub_date_str):
+    if not pub_date_str:
+        return None
+    try:
+        dt = parsedate_to_datetime(pub_date_str)
+        if dt:
+            return dt.date()
+    except Exception:
+        pass
+    try:
+        match = re.search(r'(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+(\d{4})', str(pub_date_str), re.IGNORECASE)
+        if match:
+            day, month_str, year = match.groups()
+            months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
+            month = months.index(month_str.lower()[:3]) + 1
+            return datetime.date(int(year), month, int(day))
+    except Exception:
+        pass
+    return None
+
 def search_google_news_rss(query, max_results=15):
     encoded_query = urllib.parse.quote(query)
     url = f"https://news.google.com/rss/search?q={encoded_query}&hl=id&gl=ID&ceid=ID:id"
@@ -558,6 +580,33 @@ def scrape(config_params):
             site_query = " OR ".join([f"site:{d}" for d in raw_domains])
             query = f"{query} {site_query}"
 
+    start_date_str = config_params.get("start_date")
+    end_date_str = config_params.get("end_date")
+
+    start_date_obj = None
+    end_date_obj = None
+
+    if start_date_str:
+        try:
+            start_date_obj = datetime.datetime.strptime(str(start_date_str).strip(), "%Y-%m-%d").date()
+        except ValueError:
+            raise ValidationError("Parameter 'start_date' harus berformat YYYY-MM-DD.")
+
+    if end_date_str:
+        try:
+            end_date_obj = datetime.datetime.strptime(str(end_date_str).strip(), "%Y-%m-%d").date()
+        except ValueError:
+            raise ValidationError("Parameter 'end_date' harus berformat YYYY-MM-DD.")
+
+    if start_date_obj and end_date_obj and start_date_obj > end_date_obj:
+        raise ValidationError("Parameter 'start_date' tidak boleh setelah 'end_date'.")
+
+    if start_date_obj:
+        query = f"{query} after:{start_date_obj.strftime('%Y-%m-%d')}"
+    if end_date_obj:
+        next_day = end_date_obj + datetime.timedelta(days=1)
+        query = f"{query} before:{next_day.strftime('%Y-%m-%d')}"
+
     try:
         max_results = int(config_params.get("max_results", 10))
     except (ValueError, TypeError):
@@ -591,6 +640,15 @@ def scrape(config_params):
         url_clean = (item.get("link") or "").strip().rstrip('/')
         if url_clean and url_clean in previously_scraped_urls:
             continue
+
+        # Filter tanggal publikasi
+        pub_d = _parse_pub_date(item.get("pub_date"))
+        if pub_d:
+            if start_date_obj and pub_d < start_date_obj:
+                continue
+            if end_date_obj and pub_d > end_date_obj:
+                continue
+
         item["_query"] = query
         items.append(item)
         if len(items) >= candidate_pool_size:

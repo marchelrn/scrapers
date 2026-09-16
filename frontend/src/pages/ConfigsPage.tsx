@@ -576,6 +576,8 @@ export function ConfigsPage() {
                         paramsList = [
                           { name: 'query', label: 'Search Query', type: 'text', required: true, placeholder: 'e.g. Pertanian Sulawesi Utara 2026' },
                           { name: 'domain_filter', label: 'Domain Filter (Optional)', type: 'text', required: false, placeholder: 'e.g. bps.go.id, antaranews.com' },
+                          { name: 'start_date', label: 'Start Date (Tanggal Awal)', type: 'date', required: false, placeholder: 'YYYY-MM-DD', description: 'Tanggal awal publikasi berita (contoh: 2026-01-01).' },
+                          { name: 'end_date', label: 'End Date (Tanggal Akhir)', type: 'date', required: false, placeholder: 'YYYY-MM-DD', description: 'Tanggal akhir publikasi berita (contoh: 2026-09-16).' },
                           { name: 'max_results', label: 'Max Results', type: 'number', required: false, default: 10 },
                           { name: 'ai_instruction', label: 'AI Instruction / Prompt', type: 'textarea', required: false, placeholder: 'e.g. Ringkas dan ekstrak hanya data mengenai komoditas Pertanian' },
                           { name: 'deduplicate', label: 'Hindari Duplikasi (Skip URL Lama)', type: 'boolean', required: false, default: true }
@@ -649,14 +651,14 @@ export function ConfigsPage() {
                                 </select>
                               ) : (
                                 <input
-                                  type={pType === 'number' ? 'number' : 'text'}
+                                  type={pType === 'number' ? 'number' : pType === 'date' ? 'date' : 'text'}
                                   required={pReq}
                                   placeholder={pPlaceholder}
                                   value={dynamicParamValues[pName] ?? ''}
                                   onChange={(e) =>
                                     setDynamicParamValues((prev) => ({
                                       ...prev,
-                                      [pName]: pType === 'number' ? Number(e.target.value) : e.target.value,
+                                      [pName]: pType === 'number' ? (e.target.value === '' ? '' : Number(e.target.value)) : e.target.value,
                                     }))
                                   }
                                   className="input"

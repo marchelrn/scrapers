@@ -127,7 +127,7 @@ export function DashboardPage() {
                     </div>
                   </div>
                   <p className="text-3xl font-extrabold text-emerald-400">{summary?.successful_jobs ?? 0}</p>
-                  <span className="text-[11px] text-gray-400">Job selesai tanpa kendala</span>
+                  <span className="text-[11px] text-gray-400">Job selesai</span>
                 </div>
 
                 {/* Failed Jobs */}
@@ -139,7 +139,7 @@ export function DashboardPage() {
                     </div>
                   </div>
                   <p className="text-3xl font-extrabold text-red-400">{summary?.failed_jobs ?? 0}</p>
-                  <span className="text-[11px] text-gray-400">Job gagal saat diproses</span>
+                  <span className="text-[11px] text-gray-400">Job gagal </span>
                 </div>
               </div>
           )}
