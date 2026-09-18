@@ -221,7 +221,7 @@ export function JobDetailPage() {
                 </button>
                 <button onClick={copyResults} className="btn-secondary text-xs flex items-center gap-1.5 px-3 py-1.5 shrink-0">
                   {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>Download JSON</span>
+                  <span>Copy JSON</span>
                 </button>
               </div>
             )}
@@ -258,7 +258,6 @@ export function JobDetailPage() {
                 : 'border-transparent text-gray-400 hover:text-gray-200'
             }`}
           >
-            <Database className="w-4 h-4" />
             <span>Results</span>
             {flattenedRows.length > 0 && (
               <span className="bg-brand-500/20 text-brand-300 text-[11px] px-2 py-0.5 rounded-full font-mono">
@@ -275,7 +274,6 @@ export function JobDetailPage() {
                 : 'border-transparent text-gray-400 hover:text-gray-200'
             }`}
           >
-            <Terminal className="w-4 h-4" />
             <span>Terminal Process</span>
             {job.logs && job.logs.length > 0 && (
               <span className="bg-surface-700 text-gray-300 text-[11px] px-2 py-0.5 rounded-full font-mono">
@@ -291,8 +289,7 @@ export function JobDetailPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-xs font-bold text-teal-300 uppercase tracking-wider flex items-center gap-2">
-                  <Database className="w-4 h-4" />
-                  <span>Data Ekstraksi</span>
+                  <span>Hasil Scraping</span>
                 </h3>
               </div>
 
