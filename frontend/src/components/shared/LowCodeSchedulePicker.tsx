@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
-import { Clock, Calendar as CalendarIcon, Check } from 'lucide-react'
+import { Check} from 'lucide-react'
 
 export type ScheduleMode = 'minutes' | 'hours' | 'daily' | 'weekly' | 'monthly' | 'cron'
 
 export interface LowCodeSchedulePickerProps {
   initialCron?: string
   initialTimezone?: string
-  onChange: (cronExpression: string, timezone: string) => void
+  /** true: jadwal hanya dieksekusi sekali, lalu berhenti sendiri */
+  initialRunOnce?: boolean
+  onChange: (cronExpression: string, timezone: string, runOnce: boolean) => void
 }
 
 const DAYS_OF_WEEK = [
@@ -86,12 +88,35 @@ export function cronToIndonesian(cron: string, timezone = 'Asia/Makassar'): stri
   return `Jadwal kustom: ${cron} (${tzShort})`
 }
 
+/**
+ * Describes a schedule for display, accounting for one-shot schedules whose
+ * cron expression only marks the single moment they fire.
+ */
+export function describeSchedule(
+  cron: string,
+  timezone = 'Asia/Makassar',
+  runOnce = false,
+  lastRun?: string | null
+): string {
+  if (!runOnce) return cronToIndonesian(cron, timezone)
+
+  if (lastRun) {
+    const d = new Date(lastRun)
+    if (!isNaN(d.getTime())) {
+      return `Sekali saja \u2014 sudah dieksekusi ${d.toLocaleString('id-ID')}`
+    }
+  }
+  return 'Schedule ini hanya akan dijalankan sekali'
+}
+
 export function LowCodeSchedulePicker({
   initialCron = '0 0 * * *',
   initialTimezone = 'Asia/Makassar',
+  initialRunOnce = false,
   onChange,
 }: LowCodeSchedulePickerProps) {
   const [mode, setMode] = useState<ScheduleMode>('daily')
+  const [runOnce, setRunOnce] = useState(initialRunOnce)
   const [minuteInterval, setMinuteInterval] = useState(15)
   const [hourInterval, setHourInterval] = useState(1)
   const [atMinute, setAtMinute] = useState(0)
@@ -123,8 +148,8 @@ export function LowCodeSchedulePicker({
       generatedCron = customCron
     }
 
-    onChange(generatedCron, timezone)
-  }, [mode, minuteInterval, hourInterval, atMinute, dailyTime, weeklyDays, monthlyDay, customCron, timezone])
+    onChange(generatedCron, timezone, runOnce)
+  }, [mode, minuteInterval, hourInterval, atMinute, dailyTime, weeklyDays, monthlyDay, customCron, timezone, runOnce])
 
   const toggleWeeklyDay = (dayVal: number) => {
     if (weeklyDays.includes(dayVal)) {
@@ -138,9 +163,46 @@ export function LowCodeSchedulePicker({
 
   return (
     <div className="space-y-4">
+      {/* Execution Pattern: repeat forever vs fire once */}
+      <div className="form-group">
+        <label className="label text-xs font-semibold text-gray-300">Pola Eksekusi</label>
+        <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-surface-950 border border-surface-700 text-xs">
+          <button
+            type="button"
+            onClick={() => setRunOnce(false)}
+            className={`py-2 px-2.5 rounded-lg flex items-center justify-center gap-1.5 transition-all font-medium ${
+              !runOnce
+                ? 'bg-brand-600 text-white shadow-md shadow-brand-900/40 font-semibold'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-surface-800'
+            }`}
+          >
+            <span>Berulang</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setRunOnce(true)}
+            className={`py-2 px-2.5 rounded-lg flex items-center justify-center gap-1.5 transition-all font-medium ${
+              runOnce
+                ? 'bg-amber-600 text-white shadow-md shadow-amber-900/40 font-semibold'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-surface-800'
+            }`}
+          >
+            <span>Sekali Saja</span>
+          </button>
+        </div>
+        <p className="text-[11px] text-gray-400 mt-1.5">
+          {runOnce
+            ? 'Dieksekusi satu kali pada waktu cocok berikutnya, lalu jadwal otomatis dinonaktifkan.'
+            : 'Dieksekusi terus-menerus setiap kali waktu sesuai dengan yang ditentukan.'}
+        </p>
+      </div>
+
       {/* Visual Mode Selector Tabs */}
       <div className="form-group">
-        <label className="label text-xs font-semibold text-gray-300">Pilih Frekuensi Eksekusi</label>
+        <label className="label text-xs font-semibold text-gray-300">
+          {runOnce ? 'Pilih Waktu Eksekusi' : 'Pilih Frekuensi Eksekusi'}
+        </label>
         <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-surface-950 border border-surface-700 text-xs">
           <button
             type="button"
@@ -151,7 +213,6 @@ export function LowCodeSchedulePicker({
                 : 'text-gray-400 hover:text-gray-200 hover:bg-surface-800'
             }`}
           >
-            <CalendarIcon className="w-3.5 h-3.5" />
             <span>Setiap Hari</span>
           </button>
 
@@ -164,7 +225,6 @@ export function LowCodeSchedulePicker({
                 : 'text-gray-400 hover:text-gray-200 hover:bg-surface-800'
             }`}
           >
-            <Clock className="w-3.5 h-3.5" />
             <span>Mingguan</span>
           </button>
 
@@ -189,7 +249,6 @@ export function LowCodeSchedulePicker({
                 : 'text-gray-400 hover:text-gray-200 hover:bg-surface-800'
             }`}
           >
-            <Clock className="w-3.5 h-3.5" />
             <span>Interval Jam</span>
           </button>
 
@@ -202,7 +261,6 @@ export function LowCodeSchedulePicker({
                 : 'text-gray-400 hover:text-gray-200 hover:bg-surface-800'
             }`}
           >
-            <CalendarIcon className="w-3.5 h-3.5" />
             <span>Bulanan</span>
           </button>
 

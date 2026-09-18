@@ -90,4 +90,4 @@ goose -dir db postgres "DB_URL_ANDA_DISINI" reset
 goose -dir db postgres "DB_URL_ANDA_DISINI" up
 ```
 
-Setelah Anda mengeksekusi perintah `up` dan berhasil, tabel `scraping_configs`, `scraping_jobs`, `secrets`, `schedules` dll siap untuk diakses oleh Backend API Scraper BPS ini.
+Setelah Anda mengeksekusi perintah `up` dan berhasil, tabel `scraping_configs`, `scraping_jobs`, `schedules` dll siap untuk diakses oleh Backend API Scraper BPS ini.

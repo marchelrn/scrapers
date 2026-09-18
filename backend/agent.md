@@ -65,20 +65,8 @@ Metode ini mengambil data dari URL yang telah ditentukan. MVP harus mendukung se
 - Endpoint API JSON resmi atau yang memiliki izin akses.
 - Teknik ekstraksi CSS atau API JSON.
 - Halaman dinamis melalui headless browser jika memang diperlukan oleh target yang diprioritaskan.
-- Autentikasi berbasis API key atau bearer token jika dibutuhkan.
-- Satu implementasi SSO atau browser session yang disepakati berdasarkan kebutuhan nyata.
 
-Autentikasi target harus eksplisit melalui tipe autentikasi, misalnya:
-
-```text
-auth_type: none
-auth_type: api_key
-auth_type: bearer_token
-auth_type: browser_session
-auth_type: sso_<provider>
-```
-
-Jangan membuat login generik ke semua website. SSO harus diimplementasikan untuk provider atau pola yang jelas, disetujui, dan memiliki izin resmi.
+Autentikasi target tidak didukung. Sistem tidak menyimpan kredensial apa pun (lihat bagian 9), sehingga hanya target publik atau target yang aksesnya sudah diizinkan tanpa login yang dapat diambil. Jangan membuat login generik ke semua website; halaman yang menuntut login harus ditempuh melalui jalur akses resmi ke pengelola situs, bukan melalui scraper.
 
 #### Metode `google_search`
 
@@ -93,7 +81,7 @@ Parameter minimum:
 - Rentang waktu jika provider mendukungnya.
 - Field hasil yang disimpan.
 
-API key provider harus disimpan melalui environment variable atau secret storage dan tidak boleh menjadi parameter biasa yang tampil pada response.
+API key provider harus disimpan melalui environment variable dan tidak boleh menjadi parameter biasa yang tampil pada response.
 
 #### Metode `site_crawl`
 
@@ -249,8 +237,6 @@ Parameter yang umum digunakan:
 - `query_params`.
 - `body`.
 - `json_path`.
-- `auth_type`.
-- `secret_reference`.
 - `timeout`.
 - `retry_count`.
 - `max_results`.
@@ -263,14 +249,19 @@ Validasi minimal:
 - Tidak boleh ada parameter duplikat.
 - Tipe data harus benar.
 - Nilai harus memenuhi aturan format, minimum, maksimum, dan panjang.
-- Parameter autentikasi harus konsisten dengan `auth_type`.
 - URL harus menggunakan scheme yang diizinkan dan lolos validasi SSRF.
 
-`parameter_value` bertipe JSONB tidak otomatis aman untuk menyimpan secret. Bedakan parameter biasa, parameter sensitif, dan reference ke secret storage.
+`parameter_value` bertipe JSONB bukan tempat menyimpan kredensial. Sistem tidak menyediakan secret storage, sehingga parameter tidak boleh memuat password, token, API key, atau cookie.
 
 ## 9. Autentikasi Target dan SSO
 
-Tahapan dukungan autentikasi:
+Status saat ini: autentikasi target tidak didukung. Fitur Secret Vault (tabel
+`secrets`, endpoint `/secrets`, halaman Secret Vault, dan resolusi kredensial pada
+worker) sudah dihapus, sehingga sistem tidak menyimpan kredensial apa pun. Target
+yang menuntut login ditempuh melalui jalur akses resmi ke pengelola situs, bukan
+dengan menyimpan kredensial di aplikasi.
+
+Tahapan yang sebelumnya direncanakan dan kini tidak berlaku:
 
 - MVP: website publik, API key, bearer token, dan satu pola SSO atau browser session yang diprioritaskan.
 - Fase berikutnya: provider SSO tambahan berdasarkan kebutuhan nyata.
@@ -281,7 +272,7 @@ Aturan keamanan:
 - Scraping hanya boleh dilakukan terhadap sumber yang diizinkan organisasi dan user yang berwenang.
 - Password, token, refresh token, cookie, dan session data tidak boleh ditulis di source code.
 - Secret tidak boleh dikembalikan dalam API response atau log.
-- Gunakan environment variable, secret manager, atau secret reference terenkripsi.
+- Gunakan environment variable atau secret manager di luar aplikasi; aplikasi ini tidak menyimpan kredensial.
 - Gunakan scope dan hak akses minimum.
 - Gunakan integrasi resmi untuk SSO.
 - Jangan menyimpan kredensial pribadi user jika service account atau integrasi resmi tersedia.
@@ -557,6 +548,9 @@ Fitur berikut tidak termasuk implementasi penuh MVP:
 
 ### Fase 3: Target URL dengan Authentication
 
+Dibatalkan. Secret Vault dihapus dari sistem, sehingga tidak ada penyimpanan
+kredensial yang dapat menopang fase ini.
+
 - API key atau bearer token melalui secret reference.
 - Browser session jika dibutuhkan.
 - Satu integrasi SSO yang telah diprioritaskan dan memiliki izin resmi.
@@ -726,7 +720,7 @@ Urutan minimum berikut menjadi backlog resmi proyek:
 11. **Sesi 5.2 - Scheduler Recovery dan Concurrency**
     - Tambahkan reload, `next_run`, lock, dan duplicate prevention.
     - Output: restart dan concurrency test.
-12. **Sesi 6.1 - Secret Reference dan Target Authentication**
+12. **Sesi 6.1 - Secret Reference dan Target Authentication** *(hasilnya dihapus kembali: Secret Vault tidak lagi ada di sistem)*
     - Tambahkan API key atau bearer token yang aman.
     - Output: authenticated target test.
 13. **Sesi 6.2 - SSO Provider yang Diprioritaskan**

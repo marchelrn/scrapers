@@ -13,17 +13,6 @@ type Repository struct {
 	ScrapingLog     ScrapingLogRepository
 	ScrapingResult  ScrapingResultRepository
 	Dashboard       DashboardRepository
-	Secret          SecretRepository
-}
-
-// ── Secrets ──────────────────────────────────────────────────────────────────
-
-type SecretRepository interface {
-	Create(secret *models.Secret) error
-	GetAll(userID string, userRole string) ([]models.Secret, error)
-	GetByID(id string, userID string, userRole string) (*models.Secret, error)
-	Update(secret *models.Secret) error
-	Delete(id string) error
 }
 
 // ── Users ────────────────────────────────────────────────────────────────────

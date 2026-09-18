@@ -1,7 +1,27 @@
 import { useState, useEffect, useRef } from 'react'
-import { proxyApi } from '../../api/methods'
-import { X, MousePointer, Check, Loader2, RefreshCw, Layers, CheckSquare } from 'lucide-react'
+import { proxyApi, ProxyError } from '../../api/methods'
+import { X, MousePointer, Check, Loader2, RefreshCw, Layers, CheckSquare, AlertTriangle } from 'lucide-react'
 import toast from 'react-hot-toast'
+
+// Saran tindakan per jenis kegagalan. Pesan dari backend menjelaskan APA yang
+// terjadi; baris ini menjelaskan APA YANG HARUS DILAKUKAN operator, sehingga
+// kegagalan yang bukan kesalahannya tidak berhenti sebagai jalan buntu.
+const PROXY_HINTS: Record<string, string> = {
+  CHALLENGE_DETECTED:
+    'Pemilihan visual tidak mungkin di situs ini. Isi selector secara manual, atau pilih teknik Headless / Cari Kata Kunci pada konfigurasi.',
+  BLOCKED_403:
+    'Situs ini menolak server platform, bukan isian Anda. Teknik Headless kadang masih berhasil karena menjalankan peramban sungguhan.',
+  RATE_LIMITED_429: 'Tunggu beberapa menit, lalu tekan Muat Halaman lagi.',
+  NOT_FOUND: 'Buka alamat ini di tab peramban biasa untuk memastikan halamannya memang ada.',
+  VALIDATION_ERROR: 'Perbaiki alamat pada kolom di atas, lalu tekan Muat Halaman.',
+  AUTH_FAILED: 'Halaman di balik login tidak dapat diambil platform ini.',
+  UPSTREAM_ERROR: 'Masalah ada di sisi situs target. Coba lagi beberapa saat kemudian.',
+  NETWORK_ERROR: 'Coba lagi; bila berulang, laporkan ke IPDS beserta alamat yang Anda pakai.',
+  PROXY_AUTH_FAILED:
+    'Kredensial proxy keluar platform ditolak. Ini murni konfigurasi server: laporkan ke IPDS, atau minta proxy dimatikan sementara agar penarikan berjalan langsung.',
+  PROXY_ERROR:
+    'Proxy keluar platform tidak dapat dihubungi. Laporkan ke IPDS; sementara itu tidak ada yang bisa Anda perbaiki dari sisi konfigurasi scraper.',
+}
 
 interface VisualSelectorModalProps {
   initialUrl: string
@@ -14,13 +34,33 @@ export function VisualSelectorModal({ initialUrl, onSelectSelector, onClose }: V
   const [loading, setLoading] = useState(false)
   const [selectedCss, setSelectedCss] = useState('')
   const [hoveredCss, setHoveredCss] = useState('')
+  // Dua angka yang berbeda dan sama-sama perlu dilihat operator: berapa elemen
+  // yang ia klik, dan berapa elemen yang benar-benar akan terambil oleh selector
+  // hasilnya. Keduanya berbeda begitu beberapa elemen sejenis digabung menjadi
+  // satu selector induk -- dan selisihnya itulah yang mencegah kejutan saat job
+  // dijalankan.
+  const [selectionCount, setSelectionCount] = useState(0)
+  const [selectionMatches, setSelectionMatches] = useState(0)
+  // Alasan kegagalan ditahan di state, bukan hanya di toast: toast menghilang
+  // setelah beberapa detik dan memotong pesan panjang, sedangkan penjelasan
+  // "mengapa" inilah yang dibutuhkan operator untuk memutuskan langkah berikut.
+  const [loadError, setLoadError] = useState<{ code: string; message: string; targetStatus?: number } | null>(null)
+  // URL yang benar-benar diambil backend setelah pengalihan; selector disimpan
+  // terhadap alamat ini, bukan terhadap alamat sebelum redirect.
+  const [resolvedUrl, setResolvedUrl] = useState(initialUrl)
   const iframeRef = useRef<HTMLIFrameElement>(null)
 
   const loadTargetHtml = async (targetUrl: string) => {
     if (!targetUrl) return
     setLoading(true)
+    setLoadError(null)
+    setSelectedCss('')
+    setHoveredCss('')
+    setSelectionCount(0)
+    setSelectionMatches(0)
     try {
-      const html = await proxyApi.getHtml(targetUrl)
+      const { html, finalUrl } = await proxyApi.getHtml(targetUrl)
+      setResolvedUrl(finalUrl)
       if (iframeRef.current) {
         const doc = iframeRef.current.contentDocument || iframeRef.current.contentWindow?.document
         if (doc) {
@@ -32,8 +72,17 @@ export function VisualSelectorModal({ initialUrl, onSelectSelector, onClose }: V
           injectPickerScript(doc)
         }
       }
-    } catch {
-      toast.error('Gagal mengambil HTML target via proxy')
+    } catch (err) {
+      // Backend sudah membedakan diblokir, dibatasi laju, halaman verifikasi,
+      // alamat salah, dan situs mati. Menampilkan satu pesan generik untuk
+      // semuanya membuat operator menyalahkan isiannya sendiri padahal yang
+      // menolak adalah situs target.
+      const proxyError =
+        err instanceof ProxyError
+          ? err
+          : new ProxyError('UNKNOWN_ERROR', 'Gagal mengambil HTML target via proxy.')
+      setLoadError({ code: proxyError.code, message: proxyError.message, targetStatus: proxyError.targetStatus })
+      toast.error(proxyError.message, { duration: 8000 })
     } finally {
       setLoading(false)
     }
@@ -62,59 +111,152 @@ export function VisualSelectorModal({ initialUrl, onSelectSelector, onClose }: V
       'sm:', 'md:', 'lg:', 'xl:', '2xl:', 'hover:', 'focus:', 'group-'
     ]
 
-    const filterClasses = (classNameStr: string): string => {
-      if (!classNameStr || typeof classNameStr !== 'string') return ''
-      return classNameStr
+    // Nama class perlu di-escape, bukan dibuang. Class Tailwind responsif
+    // (`md:mt-4`) memuat titik dua yang tidak sah dalam selector kecuali
+    // di-escape; versi sebelumnya membuangnya, sehingga elemen yang HANYA
+    // dikenali oleh class semacam itu kehilangan penandanya.
+    const escapeIdent = (value: string): string => {
+      const globalCss = (doc.defaultView as (Window & typeof globalThis) | null)?.CSS
+      if (globalCss && typeof globalCss.escape === 'function') return globalCss.escape(value)
+      return value.replace(/[^a-zA-Z0-9_-]/g, (ch) => `\\${ch}`)
+    }
+
+    const keptClasses = (el: Element): string[] => {
+      const raw = typeof el.className === 'string' ? el.className : ''
+      if (!raw) return []
+      return raw
         .trim()
         .split(/\s+/)
-        .filter(cls => {
-          if (!cls) return false
-          if (cls.includes(':')) return false
-          if (ignoredClassPrefixes.some(prefix => cls.startsWith(prefix))) return false
-          return true
-        })
-        .join('.')
+        .filter((cls) => cls && !ignoredClassPrefixes.some((prefix) => cls.startsWith(prefix)))
+    }
+
+    // Satu compound selector untuk satu elemen: tag + class penanda, dan
+    // :nth-of-type HANYA bila class belum cukup membedakannya dari saudara
+    // sekandung. Versi sebelumnya selalu menempelkan :nth-of-type begitu ada
+    // saudara bertag sama, sehingga selector terikat pada posisi persis dan
+    // langsung gagal ketika situs menambah satu elemen di atasnya.
+    const compoundFor = (el: Element, withPosition: boolean): string => {
+      const tag = el.nodeName.toLowerCase()
+      let compound = tag + keptClasses(el).map((cls) => `.${escapeIdent(cls)}`).join('')
+      const parent = el.parentElement
+      if (!parent || !withPosition) return compound
+
+      let ambiguous = false
+      try {
+        ambiguous = Array.from(parent.children).filter((child) => child.matches(compound)).length > 1
+      } catch {
+        ambiguous = true
+      }
+      if (ambiguous) {
+        const sameTag = Array.from(parent.children).filter(
+          (child) => child.nodeName.toLowerCase() === tag,
+        )
+        if (sameTag.length > 1) {
+          compound += `:nth-of-type(${sameTag.indexOf(el) + 1})`
+        }
+      }
+      return compound
+    }
+
+    // el.matches() menilai selector lengkap termasuk bagian leluhurnya, jadi
+    // hasilnya sama dengan menyaring querySelectorAll -- tanpa menelusuri
+    // seluruh dokumen setiap kali kursor bergerak.
+    const matchesTarget = (selector: string, el: Element): boolean => {
+      if (!selector) return false
+      try {
+        return el.matches(selector)
+      } catch {
+        return false
+      }
+    }
+
+    const countMatches = (selector: string): number => {
+      try {
+        return doc.querySelectorAll(selector).length
+      } catch {
+        return 0
+      }
     }
 
     const generateSelector = (el: HTMLElement): string => {
-      if (el.id) return `#${el.id}`
-      let path: string[] = []
-      let curr: HTMLElement | null = el
-      while (curr && curr.nodeType === Node.ELEMENT_NODE && curr.nodeName.toLowerCase() !== 'html' && curr.nodeName.toLowerCase() !== 'body') {
-        let tagName = curr.nodeName.toLowerCase()
-        if (curr.id) {
-          path.unshift(`#${curr.id}`)
+      if (el.id) return `#${escapeIdent(el.id)}`
+
+      // Rantai penuh dari elemen ke atas, berhenti pada leluhur yang punya id.
+      const chain: string[] = []
+      let curr: Element | null = el
+      while (curr && curr.nodeType === Node.ELEMENT_NODE) {
+        const tag = curr.nodeName.toLowerCase()
+        if (tag === 'html' || tag === 'body') break
+        if (curr !== el && curr.id) {
+          chain.unshift(`#${escapeIdent(curr.id)}`)
           break
         }
-
-        const cleanCls = filterClasses(curr.className)
-        let selector = tagName
-        if (cleanCls) {
-          selector += `.${cleanCls}`
-        }
-
-        const parent = curr.parentElement
-        if (parent) {
-          const siblingsOfSameTag = Array.from(parent.children).filter(
-            child => child.nodeName.toLowerCase() === tagName
-          )
-          if (siblingsOfSameTag.length > 1) {
-            const index = siblingsOfSameTag.indexOf(curr) + 1
-            selector += `:nth-of-type(${index})`
-          }
-        }
-
-        path.unshift(selector)
+        chain.unshift(compoundFor(curr, true))
         curr = curr.parentElement
       }
+      if (chain.length === 0) return el.nodeName.toLowerCase()
 
-      if (path.length === 0) return el.nodeName.toLowerCase()
-      const finalPath = path.length > 4 ? path.slice(-4) : path
-      return finalPath.join(' > ')
+      // Pangkas dari atas selama selector masih menunjuk elemen yang sama.
+      // Selector terpendek yang tetap benar adalah yang paling tahan terhadap
+      // perubahan tata letak halaman -- dan yang paling bisa dibaca operator.
+      let best = chain.join(' > ')
+      for (let cut = 1; cut < chain.length; cut++) {
+        const shorter = chain.slice(cut).join(' > ')
+        if (!matchesTarget(shorter, el)) break
+        if (countMatches(shorter) !== countMatches(best)) break
+        best = shorter
+      }
+
+      // Jaring pengaman: bila hasil pemangkasan ternyata tidak menunjuk elemen
+      // ini, kembalikan rantai penuh. Selector yang tidak cocok dengan apa pun
+      // adalah kegagalan yang paling membingungkan bagi operator.
+      return matchesTarget(best, el) ? best : chain.join(' > ')
+    }
+
+    // Beberapa elemen sejenis di bawah satu induk (mis. lima paragraf artikel)
+    // sebaiknya menjadi SATU selector `induk > tag`, bukan lima selector
+    // berposisi. Selain jauh lebih pendek, hasilnya tetap benar ketika artikel
+    // bertambah satu paragraf -- dan itulah maksud operator ketika ia menyapu
+    // beberapa paragraf sekaligus.
+    const combineSelectors = (elements: HTMLElement[]): string => {
+      if (elements.length === 0) return ''
+      if (elements.length === 1) return generateSelector(elements[0])
+
+      const first = elements[0]
+      const parent = first.parentElement
+      const tag = first.nodeName.toLowerCase()
+      const sameGroup = elements.every(
+        (el) => el.parentElement === parent && el.nodeName.toLowerCase() === tag,
+      )
+
+      if (parent && sameGroup) {
+        const parentSelector = parent.id
+          ? `#${escapeIdent(parent.id)}`
+          : generateSelector(parent as HTMLElement)
+        const shared = keptClasses(first).filter((cls) =>
+          elements.every((el) => keptClasses(el).includes(cls)),
+        )
+        const childCompound = tag + shared.map((cls) => `.${escapeIdent(cls)}`).join('')
+        const grouped = `${parentSelector} > ${childCompound}`
+        if (elements.every((el) => matchesTarget(grouped, el))) return grouped
+      }
+
+      return Array.from(new Set(elements.map((el) => generateSelector(el)))).join(', ')
     }
 
     let lastHovered: HTMLElement | null = null
-    const selectedMap = new Map<string, HTMLElement>()
+    // Elemen disimpan, bukan string selector-nya. Dengan menyimpan string,
+    // penggabungan beberapa paragraf menjadi satu selector induk tidak mungkin
+    // dilakukan, dan dua elemen berbeda yang kebetulan menghasilkan selector
+    // sama akan saling menimpa.
+    const selected: HTMLElement[] = []
+
+    const publishSelection = () => {
+      const combined = combineSelectors(selected)
+      setSelectedCss(combined)
+      setSelectionCount(selected.length)
+      setSelectionMatches(combined ? countMatches(combined) : 0)
+    }
 
     doc.body.addEventListener('mouseover', (e) => {
       e.stopPropagation()
@@ -131,28 +273,25 @@ export function VisualSelectorModal({ initialUrl, onSelectSelector, onClose }: V
       e.preventDefault()
       e.stopPropagation()
       const target = e.target as HTMLElement
-      const sel = generateSelector(target)
-
       const isMulti = e.ctrlKey || e.metaKey
 
       if (isMulti) {
-        if (selectedMap.has(sel)) {
-          selectedMap.get(sel)?.classList.remove('bps-picker-selected')
-          selectedMap.delete(sel)
+        const at = selected.indexOf(target)
+        if (at >= 0) {
+          target.classList.remove('bps-picker-selected')
+          selected.splice(at, 1)
         } else {
           target.classList.add('bps-picker-selected')
-          selectedMap.set(sel, target)
+          selected.push(target)
         }
       } else {
-        selectedMap.forEach((el) => el.classList.remove('bps-picker-selected'))
         doc.querySelectorAll('.bps-picker-selected').forEach((el) => el.classList.remove('bps-picker-selected'))
-        selectedMap.clear()
+        selected.length = 0
         target.classList.add('bps-picker-selected')
-        selectedMap.set(sel, target)
+        selected.push(target)
       }
 
-      const combined = Array.from(selectedMap.keys()).join(', ')
-      setSelectedCss(combined)
+      publishSelection()
     })
   }
 
@@ -161,11 +300,9 @@ export function VisualSelectorModal({ initialUrl, onSelectSelector, onClose }: V
       toast.error('Pilih elemen di dalam pratinjau halaman terlebih dahulu')
       return
     }
-    onSelectSelector(selectedCss, url)
+    onSelectSelector(selectedCss, resolvedUrl)
     onClose()
   }
-
-  const selectedCount = selectedCss ? selectedCss.split(',').filter(Boolean).length : 0
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-6 animate-fade-in">
@@ -224,6 +361,33 @@ export function VisualSelectorModal({ initialUrl, onSelectSelector, onClose }: V
             </div>
           )}
 
+          {loadError && !loading && (
+            <div className="absolute inset-0 z-10 bg-surface-950 flex items-center justify-center p-8">
+              <div className="max-w-xl w-full rounded-2xl border border-red-500/30 bg-red-500/10 p-6">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-red-300 shrink-0 mt-0.5" />
+                  <div className="min-w-0 space-y-3">
+                    <div>
+                      <h4 className="text-sm font-bold text-red-200">Halaman target tidak dapat diambil</h4>
+                      <p className="text-xs text-gray-300 mt-1 leading-relaxed">{loadError.message}</p>
+                    </div>
+                    {PROXY_HINTS[loadError.code] && (
+                      <p className="text-xs text-amber-200 leading-relaxed">{PROXY_HINTS[loadError.code]}</p>
+                    )}
+                    <p className="font-mono text-[11px] text-gray-500">
+                      {loadError.code}
+                      {loadError.targetStatus ? ` \u00b7 status situs target: ${loadError.targetStatus}` : ''}
+                    </p>
+                    <button onClick={() => loadTargetHtml(url)} className="btn-secondary btn-sm">
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Coba Lagi</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           <iframe
             ref={iframeRef}
             title="Visual Selector Sandbox"
@@ -237,9 +401,14 @@ export function VisualSelectorModal({ initialUrl, onSelectSelector, onClose }: V
           <div className="flex-1 min-w-0">
             <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">
               <CheckSquare className="w-3.5 h-3.5 text-brand-400" />
-              <span>CSS Selector Terpilih ({selectedCount} elemen):</span>
+              <span>CSS Selector Terpilih ({selectionCount} elemen diklik):</span>
+              {selectedCss && (
+                <span className={selectionMatches === 0 ? 'text-red-300 normal-case' : 'text-brand-300 normal-case'}>
+                  selector ini mencocokkan {selectionMatches} elemen di halaman
+                </span>
+              )}
             </p>
-            <p className="font-mono text-xs text-amber-300 bg-surface-900 px-3 py-2 rounded-xl border border-surface-700 truncate">
+            <p className="font-mono text-xs text-amber-300 bg-surface-900 px-3 py-2 rounded-xl border border-surface-700 truncate" title={selectedCss || hoveredCss}>
               {selectedCss || hoveredCss || 'Belum ada elemen yang diklik'}
             </p>
           </div>
@@ -250,7 +419,7 @@ export function VisualSelectorModal({ initialUrl, onSelectSelector, onClose }: V
             </button>
             <button onClick={handleConfirm} className="btn-primary text-xs">
               <Check className="w-4 h-4" />
-              <span>Gunakan {selectedCount > 1 ? `${selectedCount} Selector` : 'Selector Ini'}</span>
+              <span>Gunakan Selector Ini{selectionMatches > 1 ? ` (${selectionMatches} elemen)` : ''}</span>
             </button>
           </div>
         </div>

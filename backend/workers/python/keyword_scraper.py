@@ -1,96 +1,127 @@
+"""
+Teknik 'keyword_find' untuk metode target_url.
+
+Teknik paling ramah bagi pengguna non-teknis: operator hanya mengisi URL dan kata
+kunci, tanpa perlu tahu selector apa pun. Semua elemen teks pada halaman disaring
+dengan logika AND -- sebuah elemen diambil bila memuat SEMUA kata kunci, tanpa
+memedulikan urutannya.
+
+Perbaikan penting dibanding versi sebelumnya:
+  * proxy: versi lama mengirim URL proxy utuh sebagai `server`, sehingga proxy
+    berkredensial selalu gagal. Sekarang memakai parser terpusat di fetcher.py.
+  * kegagalan navigasi tidak lagi ditelan `except Exception: pass`.
+  * halaman verifikasi bot terdeteksi dan dilaporkan, bukan dianggap "kosong".
+"""
+
 import os
 import re
+
 from playwright.sync_api import sync_playwright
 
-def scrape(config_params):
-    url = config_params.get("url")
-    keyword = config_params.get("keyword")
+import fetcher
+from scraper_errors import EmptyResultError, ScraperError, ValidationError
 
-    if not url or not keyword:
-        raise ValueError("Missing 'url' or 'keyword' in config parameters")
+RENDER_SETTLE_MS = int(os.environ.get("SCRAPER_RENDER_SETTLE_MS", "") or 2000)
+MAX_TEXT_LENGTH = int(os.environ.get("SCRAPER_MAX_ELEMENT_TEXT", "") or 2500)
 
-    proxies = None
-    http_proxy = os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy")
-    if http_proxy:
-        proxies = {"server": http_proxy}
+CONTENT_SELECTORS = "p, li, td, h1, h2, h3, h4, h5, h6, div.content, span.text, article"
+FALLBACK_SELECTORS = "div, p, span, li, td, a"
 
-    results = []
 
-    with sync_playwright() as p:
-        launch_options = {"headless": True}
-        if proxies:
-            launch_options["proxy"] = proxies
-
-        browser = p.chromium.launch(**launch_options)
-        context = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        )
-        page = context.new_page()
-
-        # PERBAIKAN 1: Gunakan 'load' yang lebih aman dengan timeout secukupnya, silent exception bila timeout
+def _collect_texts(page, selectors):
+    texts = []
+    try:
+        elements = page.locator(selectors).all()
+    except Exception:
+        return texts
+    for element in elements:
         try:
-            page.goto(url, wait_until="load", timeout=20000)
+            text = (element.inner_text() or "").strip()
         except Exception:
-            pass
+            continue
+        if text and len(text) <= MAX_TEXT_LENGTH:
+            texts.append(text)
+    return texts
 
-        # PERBAIKAN 2: Beri jeda agar JavaScript selesai merender komponen
-        page.wait_for_timeout(3000)
 
-        # OPSI 1: Multi-kata AND Logic (Fleksibel Multi-Kata)
-        # Pisahkan keyword panjang menjadi array kata.
-        words = [w.strip() for w in keyword.split() if w.strip()]
-        seen_texts = set()
-        
-        if len(words) == 1:
-            # Jika hanya 1 kata, gunakan pencarian regex standar dari Playwright
-            pattern = re.compile(re.escape(words[0]), re.IGNORECASE)
-            elements = page.get_by_text(pattern).all()
-            for el in elements:
+def _matches_all_words(text, words):
+    lowered = text.lower()
+    return all(word in lowered for word in words)
+
+
+def scrape(config_params):
+    url = (config_params.get("url") or "").strip()
+    keyword = (config_params.get("keyword") or "").strip()
+
+    if not url:
+        raise ValidationError("Parameter 'url' wajib diisi.")
+    if not keyword:
+        raise ValidationError("Parameter 'keyword' wajib diisi.")
+
+    words = [w.lower() for w in keyword.split() if w.strip()]
+    if not words:
+        raise ValidationError("Parameter 'keyword' tidak memuat kata apa pun.")
+
+    fetcher.prepare_navigation(url)
+
+    matches = []
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(**fetcher.browser_launch_options(url))
+        try:
+            context = browser.new_context(**fetcher.browser_context_options(url))
+            fetcher.install_asset_blocking(context)
+            page = context.new_page()
+
+            response = fetcher.navigate(page, url, wait_until="domcontentloaded")
+            fetcher.settle_page(page, url, response)
+
+            # Beri jeda singkat agar komponen yang dirender JavaScript selesai muncul.
+            try:
+                page.wait_for_timeout(RENDER_SETTLE_MS)
+            except Exception:
+                pass
+
+            if len(words) == 1:
+                pattern = re.compile(re.escape(words[0]), re.IGNORECASE)
                 try:
-                    text = el.inner_text().strip()
-                    if text and text not in seen_texts and len(text) < 2500:
-                        results.append(text)
-                        seen_texts.add(text)
+                    elements = page.get_by_text(pattern).all()
                 except Exception:
-                    continue
-        else:
-            # Jika multi-kata, ambil SEMUA elemen yang berpotensi berisi teks (paragraf, div, li, td, dll)
-            # lalu filter secara manual di python untuk memastikan sebuah elemen memuat SEMUA kata dari input
-            # terlepas dari urutannya.
-            
-            # Buat list locator tag yang umum mengandung teks konten
-            tags_to_check = page.locator("p, li, td, h1, h2, h3, h4, h5, h6, div.content, span.text, article").all()
-            
-            # Jika tag spesifik terlalu sedikit, fallback ambil semua div yang memuat teks (berisiko duplikasi tinggi 
-            # tapi nanti diatasi di tahap filter specificity). Untuk optimasi, kita limit ke p dan struktur konten.
-            if len(tags_to_check) < 5:
-                tags_to_check = page.locator("div, p, span, li, td, a").all()
-                
-            for el in tags_to_check:
-                try:
-                    text = el.inner_text().strip()
-                    if not text or len(text) > 2500:
+                    elements = []
+                candidates = []
+                for element in elements:
+                    try:
+                        text = (element.inner_text() or "").strip()
+                    except Exception:
                         continue
-                        
-                    # Pengecekan AND Logic: Apakah semua kata ada di dalam teks ini?
-                    text_lower = text.lower()
-                    contains_all = all(w.lower() in text_lower for w in words)
-                    
-                    if contains_all and text not in seen_texts:
-                        results.append(text)
-                        seen_texts.add(text)
-                except Exception:
-                    continue
+                    if text and len(text) <= MAX_TEXT_LENGTH:
+                        candidates.append(text)
+            else:
+                candidates = _collect_texts(page, CONTENT_SELECTORS)
+                if len(candidates) < 5:
+                    candidates = _collect_texts(page, FALLBACK_SELECTORS)
+                candidates = [t for t in candidates if _matches_all_words(t, words)]
 
-        browser.close()
+            seen = set()
+            for text in candidates:
+                if text not in seen:
+                    seen.add(text)
+                    matches.append(text)
+        except ScraperError:
+            raise
+        except Exception as exc:
+            raise fetcher.wrap_browser_error(url, exc)
+        finally:
+            try:
+                browser.close()
+            except Exception:
+                pass
 
-    # Saring teks yang paling spesifik (menghindari duplikasi parent container)
-    final_results = [
-        t for t in results
-        if not any(t != other and t in other for other in results)
-    ]
+    # Buang teks kontainer induk yang hanya membungkus teks yang lebih spesifik.
+    results = [t for t in matches if not any(t != other and t in other for other in matches)]
 
-    return final_results
+    if not results:
+        raise EmptyResultError(
+            "Halaman berhasil dimuat, tetapi tidak ada elemen yang memuat semua kata "
+            "kunci '%s'." % keyword, url=url)
 
-if __name__ == "__main__":
-    print(scrape({"url": "https://www.bps.go.id/id", "keyword": "Lembaga"}))
+    return results

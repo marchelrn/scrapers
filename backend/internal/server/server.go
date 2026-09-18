@@ -62,9 +62,6 @@ func Run() {
 
 	// Run server in a goroutine so it doesn't block
 	go func() {
-		log.Printf("Scraping Platform API starting on http://localhost%s", addr)
-		log.Printf("API Docs: http://localhost%s/swagger/index.html", addr)
-		log.Printf("Health Check: http://localhost%s/health", addr)
 
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("Failed to start server: %v", err)

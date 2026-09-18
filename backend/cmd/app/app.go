@@ -10,9 +10,8 @@ import (
 func Run() {
 	config.Load()
 
-	// Register scraping methods
+	// Register scraping methods (hanya dua metode yang didukung sistem ini)
 	registry.Get().Register(methods.NewTargetURLMethod())
-	registry.Get().Register(methods.NewGoogleSearchMethod())
 	registry.Get().Register(methods.NewGoogleNewsMethod())
 
 	server.Run()

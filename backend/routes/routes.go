@@ -59,16 +59,6 @@ func SetupRoutes(s *contract.Service) *gin.Engine {
 			proxy.GET("", proxyCtrl.GetHTML)
 		}
 
-		// Secrets
-		secrets := protected.Group("/secrets")
-		{
-			secrets.GET("", controllers.Secret.GetAll)
-			secrets.POST("", controllers.Secret.Create)
-			secrets.GET("/:id", controllers.Secret.GetByID)
-			secrets.PUT("/:id", controllers.Secret.Update)
-			secrets.DELETE("/:id", controllers.Secret.Delete)
-		}
-
 		// Scraping Configs
 		configs := protected.Group("/configs")
 		{

@@ -141,6 +141,7 @@ func (s *ScheduleService) registerJobInternal(sch models.Schedule) {
 			}
 		}
 
+		dispatched := false
 		if hasActive {
 			log.Printf("Schedule %d skipped: job for config %s is already pending/running\n", sch.ID, sch.ConfigID)
 		} else {
@@ -151,12 +152,19 @@ func (s *ScheduleService) registerJobInternal(sch models.Schedule) {
 				log.Printf("Failed to dispatch scheduled job for schedule %d: %v\n", sch.ID, err)
 			} else {
 				log.Printf("Successfully dispatched job for schedule %d\n", sch.ID)
+				dispatched = true
 			}
 		}
 
-		// Calculate and update next_run in a separate goroutine so it doesn't block job creation
-		// Also avoids potential deadlock if updateNextRunInternal needs a lock that cron runner holds during job execution
-		go s.updateNextRunInternal(sch.ID)
+		// Follow up in a separate goroutine so it doesn't block job creation
+		// Also avoids potential deadlock if the helper needs a lock that cron runner holds during job execution
+		if sch.RunOnce && dispatched {
+			// One-shot schedule: retire it now that its job is queued. When the
+			// dispatch was skipped or failed, it stays armed for the next match.
+			go s.completeRunOnce(sch.ID)
+		} else {
+			go s.updateNextRunInternal(sch.ID)
+		}
 	}
 
 	// Robfig cron supports "TZ=Asia/Makassar 0 * * * *" format
@@ -203,6 +211,81 @@ func (s *ScheduleService) updateNextRunInternal(scheduleID int) {
 	}
 }
 
+// completeRunOnce retires a one-shot schedule after its single execution.
+func (s *ScheduleService) completeRunOnce(scheduleID int) {
+	closed, configID := s.closeRunOnceInternal(scheduleID)
+	if !closed {
+		// Schedule is not (or no longer) one-shot: keep it armed as usual.
+		s.updateNextRunInternal(scheduleID)
+		return
+	}
+
+	log.Printf("Schedule %d executed once and is now disabled\n", scheduleID)
+	s.syncConfigScheduleFlag(configID)
+}
+
+// closeRunOnceInternal unregisters a one-shot schedule from the cron runtime and
+// marks the row as consumed. It reports whether the schedule was really closed.
+func (s *ScheduleService) closeRunOnceInternal(scheduleID int) (bool, string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	sch, err := s.scheduleRepo.GetByID(scheduleID, "", models.UserRoleAdmin)
+	if err != nil {
+		return false, ""
+	}
+
+	// The stored row wins over the snapshot captured when the cron entry was
+	// registered: the schedule may have been switched back to recurring since.
+	if !sch.RunOnce {
+		return false, sch.ConfigID
+	}
+
+	if entryID, exists := s.entryIDs[scheduleID]; exists {
+		s.cronRunner.Remove(entryID)
+		delete(s.entryIDs, scheduleID)
+	}
+
+	now := time.Now()
+	sch.Enabled = false
+	sch.NextRun = nil
+	sch.LastRun = &now
+	if err := s.scheduleRepo.Update(sch); err != nil {
+		log.Printf("Failed to close one-shot schedule %d: %v\n", scheduleID, err)
+		return false, sch.ConfigID
+	}
+
+	return true, sch.ConfigID
+}
+
+// syncConfigScheduleFlag clears config.ScheduleEnabled once a config has no
+// enabled schedule left.
+func (s *ScheduleService) syncConfigScheduleFlag(configID string) {
+	if configID == "" {
+		return
+	}
+
+	remaining, err := s.scheduleRepo.GetAll(&configID, "", models.UserRoleAdmin)
+	hasActive := false
+	if err == nil {
+		for _, rem := range remaining {
+			if rem.Enabled {
+				hasActive = true
+				break
+			}
+		}
+	}
+	if hasActive {
+		return
+	}
+
+	config, err := s.configRepo.GetByID(configID, "", models.UserRoleAdmin)
+	if err == nil && config.ScheduleEnabled {
+		config.ScheduleEnabled = false
+		_ = s.configRepo.Update(config)
+	}
+}
+
 // Create validates and creates a new schedule.
 func (s *ScheduleService) Create(req dto.CreateScheduleRequest, userID string, userRole string) (*dto.ScheduleResponse, error) {
 	// Validate config exists and user owns it
@@ -226,11 +309,18 @@ func (s *ScheduleService) Create(req dto.CreateScheduleRequest, userID string, u
 		enabled = *req.Enabled
 	}
 
+	// Default: keep repeating on every cron match.
+	runOnce := false
+	if req.RunOnce != nil {
+		runOnce = *req.RunOnce
+	}
+
 	schedule := &models.Schedule{
 		ConfigID:       req.ConfigID,
 		CronExpression: req.CronExpression,
 		Timezone:       timezone,
 		Enabled:        enabled,
+		RunOnce:        runOnce,
 	}
 
 	if err := s.scheduleRepo.Create(schedule); err != nil {
@@ -319,7 +409,16 @@ func (s *ScheduleService) Update(id int, req dto.UpdateScheduleRequest, userID s
 		schedule.Timezone = *req.Timezone
 	}
 
+	if req.RunOnce != nil {
+		schedule.RunOnce = *req.RunOnce
+	}
+
 	if req.Enabled != nil {
+		// Re-enabling a consumed one-shot schedule arms it for the next matching
+		// time, so the recorded run no longer describes its state.
+		if *req.Enabled && !schedule.Enabled && schedule.RunOnce {
+			schedule.LastRun = nil
+		}
 		schedule.Enabled = *req.Enabled
 	}
 
@@ -361,7 +460,7 @@ func (s *ScheduleService) Update(id int, req dto.UpdateScheduleRequest, userID s
 
 // Delete removes a schedule by ID.
 func (s *ScheduleService) Delete(id int, userID string, userRole string) error {
-	_, err := s.scheduleRepo.GetByID(id, userID, userRole)
+	schedule, err := s.scheduleRepo.GetByID(id, userID, userRole)
 	if err != nil {
 		return errors.New("schedule not found")
 	}
@@ -376,6 +475,10 @@ func (s *ScheduleService) Delete(id int, userID string, userRole string) error {
 	if err := s.scheduleRepo.Delete(id); err != nil {
 		return errors.New("failed to delete schedule")
 	}
+
+	// Synchronize config.ScheduleEnabled if no more enabled schedules exist for this config
+	s.syncConfigScheduleFlag(schedule.ConfigID)
+
 	return nil
 }
 

@@ -1,0 +1,50 @@
+{
+  "_dokumentasi": [
+    "Kebijakan akses per domain untuk seluruh worker scraping.",
+    "Berkas ini dikelola IPDS. Operator divisi tidak perlu menyentuhnya.",
+    "Kunci pada 'default' menimpa nilai bawaan dari environment variable,",
+    "dan entri pada 'domains' menimpa 'default'. Pencocokan domain dimulai dari",
+    "host paling spesifik lalu naik ke domain induk (mis. 'a.b.co.id' lalu 'b.co.id').",
+    "Field yang dikenali: min_interval, jitter, max_attempts, timeout,",
+    "circuit_threshold, circuit_cooldown, robots_mode (enforce|warn|off),",
+    "identity (identified|browser|honest), respect_crawl_delay.",
+    "Setiap pengecualian WAJIB diberi field '_alasan' agar keputusannya bisa diaudit."
+  ],
+  "default": {
+    "min_interval": 4.0,
+    "jitter": 2.0,
+    "max_attempts": 3,
+    "timeout": 20.0,
+    "circuit_threshold": 4,
+    "circuit_cooldown": 900.0,
+    "robots_mode": "enforce",
+    "identity": "identified",
+    "respect_crawl_delay": true
+  },
+  "domains": {
+    "news.google.com": {
+      "_alasan": [
+        "robots.txt news.google.com berisi 'Disallow: /' untuk semua agen, sehingga",
+        "mode 'enforce' akan mematikan seluruh metode google_news. Yang kita akses",
+        "adalah endpoint RSS (/rss/search) -- sebuah feed sindikasi yang memang",
+        "diterbitkan untuk dikonsumsi mesin, dan hanya berisi judul + tautan publik.",
+        "Pengecualian ini dicatat di sini secara sengaja agar terlihat dan bisa",
+        "ditinjau, bukan disembunyikan di dalam kode."
+      ],
+      "robots_mode": "warn",
+      "min_interval": 2.0,
+      "jitter": 1.0
+    },
+    "example.co.id": {
+      "_alasan": [
+        "CONTOH (tidak aktif digunakan). Pola untuk situs kecil yang mudah kewalahan:",
+        "jeda diperbesar dan percobaan ulang dikurangi.",
+        "Gunakan 'identity': 'browser' HANYA bila IPDS sudah memastikan situs",
+        "tersebut menolak agen ber-identitas bot padahal akses kita sah."
+      ],
+      "min_interval": 15.0,
+      "jitter": 5.0,
+      "max_attempts": 2
+    }
+  }
+}

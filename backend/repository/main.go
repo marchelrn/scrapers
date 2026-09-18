@@ -15,6 +15,5 @@ func New(db *gorm.DB) *contract.Repository {
 		ScrapingLog:     ImplScrapingLogRepository(db),
 		ScrapingResult:  ImplScrapingResultRepository(db),
 		Dashboard:       ImplDashboardRepository(db),
-		Secret:          ImplSecretRepository(db),
 	}
 }

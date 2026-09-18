@@ -11,17 +11,6 @@ type Service struct {
 	Schedule       ScheduleService
 	ScrapingJob    ScrapingJobService
 	Dashboard      DashboardService
-	Secret         SecretService
-}
-
-// ── Secrets ──────────────────────────────────────────────────────────────────
-
-type SecretService interface {
-	Create(req dto.CreateSecretRequest, userID string) (*dto.SecretResponse, error)
-	GetAll(userID string, userRole string) ([]dto.SecretResponse, error)
-	GetByID(id string, userID string, userRole string) (*dto.SecretResponse, error)
-	Update(id string, req dto.UpdateSecretRequest, userID string, userRole string) (*dto.SecretResponse, error)
-	Delete(id string, userID string, userRole string) error
 }
 
 // ── Auth ─────────────────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Settings, Briefcase, Calendar,
-  KeyRound, Users, LogOut, ChevronRight, BookOpen
+  Users, LogOut, ChevronRight, BookOpen
 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 
@@ -10,7 +10,6 @@ const navItems = [
   { to: '/configs',   label: 'Konfigurasi', icon: Settings },
   { to: '/jobs',      label: 'Riwayat Jobs', icon: Briefcase },
   { to: '/schedules', label: 'Penjadwalan', icon: Calendar },
-  { to: '/secrets',   label: 'Secret Vault', icon: KeyRound },
   { to: '/panduan',   label: 'Panduan', icon: BookOpen },
 ]
 

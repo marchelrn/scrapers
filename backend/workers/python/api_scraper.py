@@ -1,73 +1,63 @@
-import requests
-import os
+"""
+Teknik pemanggilan API/JSON untuk metode target_url.
+
+Akses jaringan lewat fetcher.py, sehingga seluruh kebijakan kesopanan
+(robots.txt, jeda per domain, cache, circuit breaker) berlaku sama seperti
+teknik lain.
+"""
+
+import fetcher
+from scraper_errors import ContentTypeError, EmptyResultError, ValidationError
+
+ALLOWED_METHODS = ("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD")
+
 
 def scrape(config_params):
-    """
-    Scrape by calling a JSON API.
-    Expected config_params:
-    - url: The API URL to call
-    - method: (Optional) GET, POST. Default is GET.
-    - json_path: (Optional) A simple key to extract from the root JSON response (e.g. "data"). 
-                 If empty, returns the whole JSON.
-    """
-    url = config_params.get("url")
-    method = config_params.get("method", "GET").upper()
-    json_path = config_params.get("json_path", "")
-    headers = config_params.get("headers", {})
-    
-    auth_type = config_params.get("auth_type", "none")
-    secret_value = config_params.get("_resolved_secret_value", "")
-    if isinstance(secret_value, str):
-        secret_value = secret_value.strip()
-    
-    if auth_type == "api_key" and secret_value:
-        # Simplistic approach: if no custom header name is provided for api_key, we use 'x-api-key'
-        # Can be enhanced by storing both key_name and key_value in secret_value JSON
-        headers["x-api-key"] = secret_value
-    elif auth_type == "bearer_token" and secret_value:
-        headers["Authorization"] = f"Bearer {secret_value}"
-    
-    if not url:
-        raise ValueError("Missing 'url' in config parameters")
-        
-    # Build proxies dictionary from environment variables (like HTTP_PROXY/HTTPS_PROXY)
-    proxies = {}
-    http_proxy = os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy")
-    https_proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
-    
-    if http_proxy:
-        proxies["http"] = http_proxy
-    if https_proxy:
-        proxies["https"] = https_proxy
+    url = (config_params.get("url") or "").strip()
+    method = (config_params.get("method") or "GET").upper()
+    json_path = (config_params.get("json_path") or "").strip()
 
-    # Merge standard User-Agent header to avoid basic 403 Forbidden responses
-    if "User-Agent" not in headers and "user-agent" not in headers:
-        headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    if "Accept" not in headers and "accept" not in headers:
+    if not url:
+        raise ValidationError("Parameter 'url' wajib diisi.")
+    if method not in ALLOWED_METHODS:
+        raise ValidationError("Metode HTTP '%s' tidak didukung." % method)
+
+    headers = config_params.get("headers") or {}
+    if not isinstance(headers, dict):
+        raise ValidationError("Parameter 'headers' harus berupa objek key-value.")
+    headers = dict(headers)
+
+    if not any(k.lower() == "accept" for k in headers):
         headers["Accept"] = "application/json, text/plain, */*"
 
-    # Only pass proxies arg if we have proxies configured
-    req_kwargs = {"headers": headers, "timeout": 10}
-    if proxies:
-        req_kwargs["proxies"] = proxies
-
-    response = requests.request(method, url, **req_kwargs)
-    response.raise_for_status()
+    response = fetcher.fetch(
+        url,
+        method=method,
+        headers=headers,
+        expect="json",
+    )
 
     data = response.json()
-    
-    if json_path:
-        # Simplistic approach: just get the root key
-        # In a real app, you might use JSONPath library (e.g. `jsonpath-ng`)
-        if isinstance(data, dict) and json_path in data:
-            data = data[json_path]
-            
-    # Wrap in list so it matches the expected results format
-    if isinstance(data, list):
-        return data
-    else:
-        return [data]
 
-if __name__ == "__main__":
-    # Test execution
-    print(scrape({"url": "https://jsonplaceholder.typicode.com/todos/1"}))
+    if json_path:
+        current = data
+        # Mendukung jalur bersarang sederhana, mis. "data.items".
+        for segment in [s for s in json_path.split(".") if s]:
+            if isinstance(current, dict) and segment in current:
+                current = current[segment]
+            else:
+                raise ContentTypeError(
+                    "json_path '%s' tidak ditemukan pada respons API." % json_path, url=url)
+        data = current
+
+    if isinstance(data, list):
+        results = data
+    elif data is None:
+        results = []
+    else:
+        results = [data]
+
+    if not results:
+        raise EmptyResultError("API merespons dengan sukses tetapi tanpa data.", url=url)
+
+    return results

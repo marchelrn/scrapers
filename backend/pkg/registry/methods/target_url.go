@@ -4,9 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os"
-	"os/exec"
-	"time"
 
 	"github.com/marchelrn/scrapers/dto"
 	"github.com/marchelrn/scrapers/pkg/registry"
@@ -85,24 +82,7 @@ func (m *TargetURLMethod) ParameterDefinitions() []registry.ParameterDefinition 
 			Required:    false,
 			Placeholder: "e.g. Inflasi",
 		},
-		{
-			Name:     "auth_type",
-			Label:    "Authentication Type",
-			Type:     "text",
-			Required: true,
-			Default:  "none",
-		},
-		{
-			Name:     "secret_reference",
-			Label:    "Secret ID",
-			Type:     "text",
-			Required: false,
-		},
 	}
-}
-
-func (m *TargetURLMethod) AuthenticationCapabilities() []string {
-	return []string{"none", "api_key", "bearer_token"}
 }
 
 func (m *TargetURLMethod) Validate(params map[string]interface{}) error {
@@ -127,20 +107,6 @@ func (m *TargetURLMethod) Validate(params map[string]interface{}) error {
 		return errors.New("parameter 'technique' is required")
 	}
 	technique := techniqueVal.(string)
-
-	// Validate Auth Type
-	authTypeVal, ok := params["auth_type"]
-	authType := "none"
-	if ok && authTypeVal != "" {
-		authType = authTypeVal.(string)
-	}
-
-	if authType != "none" {
-		secretRef, hasRef := params["secret_reference"]
-		if !hasRef || secretRef == "" {
-			return errors.New("parameter 'secret_reference' is required when auth_type is not none")
-		}
-	}
 
 	// Validate Technique specific parameters
 	switch technique {
@@ -173,13 +139,8 @@ func (m *TargetURLMethod) Validate(params map[string]interface{}) error {
 	return nil
 }
 
-const (
-	maxOutputBytes = 5 * 1024 * 1024 // 5MB
-	maxRetries     = 2
-)
-
 func (m *TargetURLMethod) Execute(ctx context.Context, params map[string]interface{}) (*dto.WorkerResult, error) {
-	technique := params["technique"].(string)
+	technique, _ := params["technique"].(string)
 
 	pythonFile := ""
 	switch technique {
@@ -195,118 +156,16 @@ func (m *TargetURLMethod) Execute(ctx context.Context, params map[string]interfa
 		pythonFile = "headless_scraper.py"
 	case "keyword_find":
 		pythonFile = "keyword_scraper.py"
+	default:
+		return nil, errors.New("unknown technique: " + technique)
 	}
 
 	paramsJSONBytes, err := json.Marshal(params)
 	if err != nil {
 		return nil, err
 	}
-	paramsJSON := string(paramsJSONBytes)
 
-	var output []byte
-	var lastErr error
+	source, _ := params["url"].(string)
 
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		cmd := exec.CommandContext(ctx, GetPythonExecutable(), GetWorkerScriptPath(), pythonFile, paramsJSON)
-		
-		// Ensure environment variables specifically HTTP_PROXY and HTTPS_PROXY are passed
-		envVars := os.Environ()
-		hasHttp := false
-		hasHttps := false
-		for _, e := range envVars {
-			if len(e) >= 10 && e[:10] == "HTTP_PROXY" { hasHttp = true }
-			if len(e) >= 11 && e[:11] == "HTTPS_PROXY" { hasHttps = true }
-		}
-		
-		if !hasHttp && os.Getenv("HTTP_PROXY") != "" {
-			envVars = append(envVars, "HTTP_PROXY="+os.Getenv("HTTP_PROXY"))
-		}
-		if !hasHttps && os.Getenv("HTTPS_PROXY") != "" {
-			envVars = append(envVars, "HTTPS_PROXY="+os.Getenv("HTTPS_PROXY"))
-		}
-		cmd.Env = envVars
-
-		output, lastErr = cmd.CombinedOutput()
-
-		if ctx.Err() != nil {
-			break
-		}
-
-		if lastErr == nil {
-			break
-		}
-
-		if attempt < maxRetries {
-			time.Sleep(time.Duration(attempt+1) * time.Second)
-		}
-	}
-
-	if ctx.Err() != nil {
-		nowISO := time.Now().UTC().Format(time.RFC3339)
-		sourceStr := ""
-		if urlVal, ok := params["url"].(string); ok {
-			sourceStr = urlVal
-		}
-		return &dto.WorkerResult{
-			Status:  "failed",
-			Method:  m.Code(),
-			Results: []interface{}{},
-			Metadata: dto.WorkerMetadata{
-				Source:    sourceStr,
-				FetchedAt: nowISO,
-				ItemCount: 0,
-			},
-			Error: &dto.WorkerError{
-				Code:    "TIMEOUT",
-				Message: "Worker process execution timed out or was terminated: " + ctx.Err().Error(),
-			},
-		}, nil
-	}
-
-	if len(output) > maxOutputBytes {
-		nowISO := time.Now().UTC().Format(time.RFC3339)
-		return &dto.WorkerResult{
-			Status:  "failed",
-			Method:  m.Code(),
-			Results: []interface{}{},
-			Metadata: dto.WorkerMetadata{
-				Source:    params["url"].(string),
-				FetchedAt: nowISO,
-				ItemCount: 0,
-			},
-			Error: &dto.WorkerError{
-				Code:    "OUTPUT_LIMIT_EXCEEDED",
-				Message: "Worker output exceeded 5MB limit",
-			},
-		}, nil
-	}
-
-	var workerResult dto.WorkerResult
-	parseErr := json.Unmarshal(output, &workerResult)
-
-	if parseErr != nil {
-		nowISO := time.Now().UTC().Format(time.RFC3339)
-
-		msg := "Invalid worker output contract: " + parseErr.Error()
-		if lastErr != nil {
-			msg += " | Error: " + lastErr.Error()
-		}
-
-		return &dto.WorkerResult{
-			Status:  "failed",
-			Method:  m.Code(),
-			Results: []interface{}{},
-			Metadata: dto.WorkerMetadata{
-				Source:    params["url"].(string),
-				FetchedAt: nowISO,
-				ItemCount: 0,
-			},
-			Error: &dto.WorkerError{
-				Code:    "EXECUTION_ERROR",
-				Message: msg + "\nOutput: " + string(output),
-			},
-		}, nil
-	}
-
-	return &workerResult, nil
+	return runWorker(ctx, m.Code(), pythonFile, string(paramsJSONBytes), source)
 }

@@ -2,25 +2,55 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { Header } from '../components/layout/Header'
 import { configsApi } from '../api/configs'
-import type { ScrapingConfig } from '../types'
-import { ArrowLeft, Play, CheckCircle2, XCircle, Code2, Edit3 } from 'lucide-react'
+import { schedulesApi } from '../api/schedules'
+import type { ScrapingConfig, Schedule } from '../types'
+import {
+  ArrowLeft, Play, CheckCircle2, XCircle, Code2, Edit3,
+  Calendar, CalendarX, Loader2, Repeat, Timer
+} from 'lucide-react'
 import { UpdateConfigModal } from '../components/shared/UpdateConfigModal'
+import { LowCodeSchedulePicker, describeSchedule } from '../components/shared/LowCodeSchedulePicker'
 import toast from 'react-hot-toast'
 
 export function ConfigDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [config, setConfig] = useState<ScrapingConfig | null>(null)
+  const [schedule, setSchedule] = useState<Schedule | null>(null)
   const [loading, setLoading] = useState(true)
   const [showUpdateModal, setShowUpdateModal] = useState(false)
 
-  useEffect(() => {
+  // Schedule Modal State
+  const [showScheduleModal, setShowScheduleModal] = useState(false)
+  const [cronExpression, setCronExpression] = useState('0 0 * * *')
+  const [scheduleTimezone, setScheduleTimezone] = useState('Asia/Makassar')
+  const [scheduleRunOnce, setScheduleRunOnce] = useState(false)
+  const [submittingSchedule, setSubmittingSchedule] = useState(false)
+
+  const fetchConfigAndSchedule = async () => {
     if (!id) return
-    configsApi
-      .getById(id)
-      .then((res) => setConfig(res))
-      .catch(() => toast.error('Gagal memuat detail konfigurasi'))
-      .finally(() => setLoading(false))
+    try {
+      const [cfg, schs] = await Promise.all([
+        configsApi.getById(id),
+        schedulesApi.getAll().catch(() => []),
+      ])
+      setConfig(cfg)
+      const foundSch = (schs || []).find((s) => s.config_id === id) || null
+      setSchedule(foundSch)
+      if (foundSch) {
+        setCronExpression(foundSch.cron_expression)
+        setScheduleTimezone(foundSch.timezone || 'Asia/Makassar')
+        setScheduleRunOnce(foundSch.run_once)
+      }
+    } catch {
+      toast.error('Gagal memuat detail konfigurasi')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchConfigAndSchedule()
   }, [id])
 
   const handleRun = async () => {
@@ -31,6 +61,59 @@ export function ConfigDetailPage() {
       navigate(`/jobs/${job.id}`)
     } catch {
       toast.error('Gagal menjalankan job')
+    }
+  }
+
+  const handleSaveSchedule = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!id) return
+    setSubmittingSchedule(true)
+    try {
+      if (schedule) {
+        await schedulesApi.update(schedule.id, {
+          cron_expression: cronExpression,
+          timezone: scheduleTimezone,
+          enabled: true,
+          run_once: scheduleRunOnce,
+        })
+      } else {
+        await schedulesApi.create({
+          config_id: id,
+          cron_expression: cronExpression,
+          timezone: scheduleTimezone,
+          enabled: true,
+          run_once: scheduleRunOnce,
+        })
+      }
+      toast.success('Jadwal scraping berhasil disimpan!')
+      setShowScheduleModal(false)
+      fetchConfigAndSchedule()
+    } catch {
+      toast.error('Gagal menyimpan jadwal')
+    } finally {
+      setSubmittingSchedule(false)
+    }
+  }
+
+  const handleUnassignSchedule = async () => {
+    if (!schedule) return
+    const confirmed = confirm(
+      config?.name
+        ? `Apakah Anda yakin ingin membatalkan/unassign jadwal otomatis untuk konfigurasi "${config.name}"?`
+        : 'Apakah Anda yakin ingin membatalkan/unassign jadwal otomatis ini?'
+    )
+    if (!confirmed) return
+
+    setSubmittingSchedule(true)
+    try {
+      await schedulesApi.delete(schedule.id)
+      toast.success('Jadwal scheduler berhasil di-unassign / dihapus')
+      setShowScheduleModal(false)
+      fetchConfigAndSchedule()
+    } catch {
+      toast.error('Gagal membatalkan jadwal')
+    } finally {
+      setSubmittingSchedule(false)
     }
   }
 
@@ -102,9 +185,65 @@ export function ConfigDetailPage() {
               </div>
               <div>
                 <span className="text-gray-500 block">Status Jadwal Otomatis</span>
-                <span className={config.schedule_enabled ? 'text-emerald-400' : 'text-gray-400'}>
-                  {config.schedule_enabled ? 'Enabled' : 'Disabled'}
-                </span>
+                {schedule ? (
+                  <div className="mt-1 space-y-1.5 p-2.5 rounded-lg bg-surface-900 border border-surface-750">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={`font-semibold flex items-center gap-1 text-[11px] ${schedule.enabled ? 'text-emerald-400' : 'text-amber-400'}`}>
+                        <Calendar className="w-3 h-3" />
+                        <span>
+                          {schedule.enabled
+                            ? 'Terjadwal (Aktif)'
+                            : schedule.run_once && schedule.last_run
+                            ? 'Terjadwal (Selesai)'
+                            : 'Terjadwal (Nonaktif)'}
+                        </span>
+                      </span>
+                      {schedule.run_once ? (
+                        <span className="badge-warning text-[10px] px-2 py-0 whitespace-nowrap"><Timer className="w-3 h-3" /> Sekali</span>
+                      ) : (
+                        <span className="badge-info text-[10px] px-2 py-0 whitespace-nowrap"><Repeat className="w-3 h-3" /> Berulang</span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-gray-300">
+                      {describeSchedule(
+                        schedule.cron_expression,
+                        schedule.timezone || 'Asia/Makassar',
+                        schedule.run_once,
+                        schedule.last_run
+                      )}
+                    </p>
+                    <p className="font-mono text-[10px] text-gray-400">
+                      {schedule.cron_expression} ({schedule.timezone || 'Asia/Makassar'})
+                    </p>
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        onClick={() => setShowScheduleModal(true)}
+                        className="btn-secondary btn-sm text-[11px] py-1 px-2 flex items-center gap-1"
+                      >
+                        <Edit3 className="w-3 h-3" />
+                        <span>Ubah</span>
+                      </button>
+                      <button
+                        onClick={handleUnassignSchedule}
+                        className="btn-danger btn-sm text-[11px] py-1 px-2 flex items-center gap-1"
+                      >
+                        <CalendarX className="w-3 h-3" />
+                        <span>Unassign</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-1 flex items-center justify-between">
+                    <span className="text-gray-400">Belum Ada Jadwal</span>
+                    <button
+                      onClick={() => setShowScheduleModal(true)}
+                      className="btn-secondary btn-sm text-[11px] py-1 px-2.5 flex items-center gap-1"
+                    >
+                      <Calendar className="w-3 h-3" />
+                      <span>Atur Jadwal</span>
+                    </button>
+                  </div>
+                )}
               </div>
               <div>
                 <span className="text-gray-500 block">Pembuat</span>
@@ -137,13 +276,82 @@ export function ConfigDetailPage() {
         </div>
       </div>
 
+      {/* Schedule Modal */}
+      {showScheduleModal && (
+        <div className="fixed inset-0 z-40 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="card w-full max-w-lg bg-surface-900 border-surface-600 shadow-2xl p-6 space-y-5 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-surface-700 pb-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-emerald-400" />
+                <span>{schedule ? 'Edit / Unassign Jadwal Scraping' : 'Atur Jadwal Scraping Otomatis'}</span>
+              </h3>
+              <button onClick={() => setShowScheduleModal(false)} className="btn-ghost btn-sm text-gray-400">
+                Batal
+              </button>
+            </div>
+
+            <div className="space-y-1 text-xs">
+              <p className="text-gray-400">
+                Konfigurasi: <span className="text-white font-semibold">{config.name}</span>
+              </p>
+              {schedule && (
+                <p className="text-emerald-400 flex items-center gap-1.5 text-[11px]">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-pulse" />
+                  <span>Jadwal saat ini terpasang ({schedule.enabled ? 'Status: Aktif' : 'Status: Nonaktif'})</span>
+                </p>
+              )}
+            </div>
+
+            <form onSubmit={handleSaveSchedule} className="space-y-4">
+              <LowCodeSchedulePicker
+                initialCron={cronExpression}
+                initialTimezone={scheduleTimezone}
+                initialRunOnce={scheduleRunOnce}
+                onChange={(newCron, newTz, newRunOnce) => {
+                  setCronExpression(newCron)
+                  setScheduleTimezone(newTz)
+                  setScheduleRunOnce(newRunOnce)
+                }}
+              />
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="submit"
+                  disabled={submittingSchedule}
+                  className="btn-primary flex-1 justify-center py-2.5 text-xs font-semibold"
+                >
+                  {submittingSchedule ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : schedule ? (
+                    'Simpan Perubahan Jadwal'
+                  ) : (
+                    'Simpan Jadwal Scraping'
+                  )}
+                </button>
+
+                {schedule && (
+                  <button
+                    type="button"
+                    disabled={submittingSchedule}
+                    onClick={handleUnassignSchedule}
+                    className="btn-danger flex-1 justify-center py-2.5 text-xs font-semibold flex items-center gap-1.5"
+                  >
+                    <CalendarX className="w-4 h-4" />
+                    <span>Unassign / Hapus Jadwal</span>
+                  </button>
+                )}
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <UpdateConfigModal
         config={config}
         isOpen={showUpdateModal}
         onClose={() => setShowUpdateModal(false)}
         onSuccess={() => {
-          if (!id) return
-          configsApi.getById(id).then((res) => setConfig(res))
+          fetchConfigAndSchedule()
         }}
       />
     </div>

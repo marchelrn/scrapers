@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os/exec"
 	"time"
 
 	"github.com/marchelrn/scrapers/dto"
@@ -50,6 +49,22 @@ func (m *GoogleNewsMethod) ParameterDefinitions() []registry.ParameterDefinition
 			Placeholder: "e.g. antaranews.com, bps.go.id",
 		},
 		{
+			Name:        "start_date",
+			Label:       "Start Date (Tanggal Awal)",
+			Type:        "date",
+			Required:    false,
+			Placeholder: "YYYY-MM-DD",
+			Description: "Tanggal awal publikasi berita (contoh: 2026-01-01).",
+		},
+		{
+			Name:        "end_date",
+			Label:       "End Date (Tanggal Akhir)",
+			Type:        "date",
+			Required:    false,
+			Placeholder: "YYYY-MM-DD",
+			Description: "Tanggal akhir publikasi berita (contoh: 2026-09-16).",
+		},
+		{
 			Name:     "max_results",
 			Label:    "Max Results",
 			Type:     "number",
@@ -72,18 +87,7 @@ func (m *GoogleNewsMethod) ParameterDefinitions() []registry.ParameterDefinition
 			Default:     true,
 			Description: "Jika aktif, URL yang sudah pernah diambil pada konfigurasi ini tidak akan diambil ulang.",
 		},
-		{
-			Name:     "auth_type",
-			Label:    "Authentication Type",
-			Type:     "text",
-			Required: true,
-			Default:  "none",
-		},
 	}
-}
-
-func (m *GoogleNewsMethod) AuthenticationCapabilities() []string {
-	return []string{"none"}
 }
 
 func (m *GoogleNewsMethod) Validate(params map[string]interface{}) error {
@@ -92,90 +96,47 @@ func (m *GoogleNewsMethod) Validate(params map[string]interface{}) error {
 		return errors.New("parameter 'query' is required")
 	}
 
-	authType, ok := params["auth_type"]
-	if !ok || authType != "none" {
-		return errors.New("parameter 'auth_type' must be 'none'")
+	var startDate, endDate time.Time
+	var hasStart, hasEnd bool
+
+	if sVal, ok := params["start_date"]; ok && sVal != nil && sVal != "" {
+		sStr, ok := sVal.(string)
+		if !ok {
+			return errors.New("parameter 'start_date' must be a string formatted YYYY-MM-DD")
+		}
+		t, err := time.Parse("2006-01-02", sStr)
+		if err != nil {
+			return errors.New("invalid 'start_date' format, must be YYYY-MM-DD")
+		}
+		startDate = t
+		hasStart = true
+	}
+
+	if eVal, ok := params["end_date"]; ok && eVal != nil && eVal != "" {
+		eStr, ok := eVal.(string)
+		if !ok {
+			return errors.New("parameter 'end_date' must be a string formatted YYYY-MM-DD")
+		}
+		t, err := time.Parse("2006-01-02", eStr)
+		if err != nil {
+			return errors.New("invalid 'end_date' format, must be YYYY-MM-DD")
+		}
+		endDate = t
+		hasEnd = true
+	}
+
+	if hasStart && hasEnd && startDate.After(endDate) {
+		return errors.New("'start_date' cannot be after 'end_date'")
 	}
 
 	return nil
 }
 
 func (m *GoogleNewsMethod) Execute(ctx context.Context, params map[string]interface{}) (*dto.WorkerResult, error) {
-	pythonFile := "google_news_scraper.py"
-
 	paramsJSONBytes, err := json.Marshal(params)
 	if err != nil {
 		return nil, err
 	}
-	paramsJSON := string(paramsJSONBytes)
 
-	var output []byte
-	var lastErr error
-
-	cmd := exec.CommandContext(ctx, GetPythonExecutable(), GetWorkerScriptPath(), pythonFile, paramsJSON)
-	output, lastErr = cmd.CombinedOutput()
-
-	if ctx.Err() != nil {
-		nowISO := time.Now().UTC().Format(time.RFC3339)
-		return &dto.WorkerResult{
-			Status:  "failed",
-			Method:  m.Code(),
-			Results: []interface{}{},
-			Metadata: dto.WorkerMetadata{
-				Source:    "google_news",
-				FetchedAt: nowISO,
-				ItemCount: 0,
-			},
-			Error: &dto.WorkerError{
-				Code:    "TIMEOUT",
-				Message: "Worker process execution timed out or was terminated: " + ctx.Err().Error(),
-			},
-		}, nil
-	}
-
-	if len(output) > 5*1024*1024 {
-		nowISO := time.Now().UTC().Format(time.RFC3339)
-		return &dto.WorkerResult{
-			Status:  "failed",
-			Method:  m.Code(),
-			Results: []interface{}{},
-			Metadata: dto.WorkerMetadata{
-				Source:    "google_news",
-				FetchedAt: nowISO,
-				ItemCount: 0,
-			},
-			Error: &dto.WorkerError{
-				Code:    "OUTPUT_LIMIT_EXCEEDED",
-				Message: "Worker output exceeded 5MB limit",
-			},
-		}, nil
-	}
-
-	var workerResult dto.WorkerResult
-	parseErr := json.Unmarshal(output, &workerResult)
-
-	if parseErr != nil {
-		nowISO := time.Now().UTC().Format(time.RFC3339)
-		msg := "Invalid worker output contract: " + parseErr.Error()
-		if lastErr != nil {
-			msg += " | Error: " + lastErr.Error()
-		}
-
-		return &dto.WorkerResult{
-			Status:  "failed",
-			Method:  m.Code(),
-			Results: []interface{}{},
-			Metadata: dto.WorkerMetadata{
-				Source:    "google_news",
-				FetchedAt: nowISO,
-				ItemCount: 0,
-			},
-			Error: &dto.WorkerError{
-				Code:    "EXECUTION_ERROR",
-				Message: msg + "\nOutput: " + string(output),
-			},
-		}, nil
-	}
-
-	return &workerResult, nil
+	return runWorker(ctx, m.Code(), "google_news_scraper.py", string(paramsJSONBytes), "google_news")
 }

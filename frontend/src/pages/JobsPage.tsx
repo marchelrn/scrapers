@@ -75,12 +75,19 @@ export function JobsPage() {
         <div className="card overflow-hidden">
           <div className="table-wrap">
             <table className="table">
+              <colgroup>
+                <col className="w-[30%]" /> {/* Nama */}
+                <col className="w-[15%]" /> {/* Status */}
+                <col className="w-[20%]" /> {/* Mulai */}
+                <col className="w-[20%]" /> {/* Selesai */}
+                <col className="w-[20%]" /> {/* Aksi */}
+              </colgroup>
               <thead>
                 <tr>
                   <th>Nama Konfigurasi</th>
-                  <th>Job ID</th>
-                  <th>Config ID</th>
-                  <th>Worker Name</th>
+                  {/*<th>Job ID</th>*/}
+                  {/*<th>Config ID</th>*/}
+                  {/*<th>Worker Name</th>*/}
                   <th>Status</th>
                   <th>Waktu Mulai</th>
                   <th>Waktu Selesai</th>
@@ -108,13 +115,13 @@ export function JobsPage() {
                         <td className="font-medium text-xs text-white">
                           {config?.name || 'Config Tanpa Nama'}
                         </td>
-                        <td className="font-mono text-xs text-brand-300 font-medium">
-                          {j.id.substring(0, 8)}...
-                        </td>
-                        <td className="font-mono text-xs text-gray-400">
-                          {j.config_id.substring(0, 8)}...
-                        </td>
-                        <td className="text-xs text-gray-300">{j.worker_name || 'python_worker'}</td>
+                        {/*<td className="font-mono text-xs text-brand-300 font-medium">*/}
+                        {/*  {j.id.substring(0, 8)}...*/}
+                        {/*</td>*/}
+                        {/*<td className="font-mono text-xs text-gray-400">*/}
+                        {/*  {j.config_id.substring(0, 8)}...*/}
+                        {/*</td>*/}
+                        {/*<td className="text-xs text-gray-300">{j.worker_name || 'python_worker'}</td>*/}
                         <td>{getStatusBadge(j.status)}</td>
                         <td className="text-xs text-gray-400">
                           {j.started_at ? new Date(j.started_at).toLocaleString('id-ID') : '-'}

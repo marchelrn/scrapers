@@ -523,7 +523,7 @@ export const PdfViewer = forwardRef<PdfViewerRef, PdfViewerProps>(function PdfVi
           <input
             ref={searchInputRef}
             type="text"
-            placeholder="Cari kata kunci di panduan (misal: visual selector, cron, secret)..."
+            placeholder="Cari kata kunci di panduan (misal: visual selector, cron, anti-blokir)..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="flex-1 bg-surface-900/90 border border-surface-600 rounded-xl px-3 py-1.5 text-xs text-gray-100 placeholder-gray-500 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all"
