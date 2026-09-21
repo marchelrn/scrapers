@@ -5,6 +5,8 @@ import { methodsApi } from '../../api/methods'
 import { VisualSelectorModal } from './VisualSelectorModal'
 import { MousePointer, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { buildParametersPayload } from '../../constants/methods'
+import { DynamicParamsForm } from './DynamicParamsForm'
 
 interface UpdateConfigModalProps {
   config: ScrapingConfig | null
@@ -124,36 +126,16 @@ export function UpdateConfigModal({
     setSubmitting(true)
 
     try {
-      let paramsPayload: { parameter_name: string; parameter_value: unknown }[] = []
-
-      if (methodCode === 'target_url') {
-        paramsPayload = [
-          { parameter_name: 'url', parameter_value: targetUrl },
-          { parameter_name: 'technique', parameter_value: technique },
-        ]
-        if (technique === 'css') {
-          paramsPayload.push({ parameter_name: 'selector', parameter_value: selector })
-        } else {
-          paramsPayload.push({ parameter_name: 'keyword', parameter_value: keyword })
-        }
-      } else {
-        const selectedM = methods.find((m) => m.code === methodCode)
-        if (selectedM && selectedM.parameters) {
-          selectedM.parameters.forEach((p) => {
-            const pName = p.Name || p.name || ''
-            if (pName) {
-              paramsPayload.push({
-                parameter_name: pName,
-                parameter_value: dynamicParamValues[pName] ?? '',
-              })
-            }
-          })
-        } else {
-          Object.entries(dynamicParamValues).forEach(([k, v]) => {
-            paramsPayload.push({ parameter_name: k, parameter_value: v })
-          })
-        }
-      }
+      const paramsPayload = buildParametersPayload(
+        methodCode,
+        targetUrlUX,
+        targetUrl,
+        technique,
+        selector,
+        keyword,
+        dynamicParamValues,
+        methods
+      )
 
       await configsApi.update(config.id, {
         name,
@@ -347,111 +329,12 @@ export function UpdateConfigModal({
                 <h4 className="text-xs font-bold text-teal-300 uppercase tracking-wider">
                   Dynamic Parameters Blueprint ({methodCode})
                 </h4>
-
-                {(() => {
-                  const foundMethod = methods.find((m) => m.code === methodCode)
-                  let paramsList = foundMethod?.parameters
-
-                  if (!paramsList || paramsList.length === 0) {
-                    if (methodCode === 'google_news') {
-                      paramsList = [
-                        { name: 'query', label: 'Search Query', type: 'text', required: true, placeholder: 'e.g. Pertanian Sulawesi Utara 2026' },
-                        { name: 'domain_filter', label: 'Domain Filter (Optional)', type: 'text', required: false, placeholder: 'e.g. bps.go.id, antaranews.com' },
-                        { name: 'start_date', label: 'Start Date (Tanggal Awal)', type: 'date', required: false, placeholder: 'YYYY-MM-DD', description: 'Tanggal awal publikasi berita (contoh: 2026-01-01).' },
-                        { name: 'end_date', label: 'End Date (Tanggal Akhir)', type: 'date', required: false, placeholder: 'YYYY-MM-DD', description: 'Tanggal akhir publikasi berita (contoh: 2026-09-16).' },
-                        { name: 'max_results', label: 'Max Results', type: 'number', required: false, default: 10 },
-                        { name: 'ai_instruction', label: 'AI Instruction / Prompt', type: 'textarea', required: false, placeholder: 'e.g. Ringkas dan ekstrak hanya data mengenai komoditas Pertanian' },
-                        { name: 'deduplicate', label: 'Hindari Duplikasi (Skip URL Lama)', type: 'boolean', required: false, default: true }
-                      ] as any
-                    }
-                  }
-
-                  if (!paramsList || paramsList.length === 0) {
-                    return (
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="form-group">
-                          <label className="label">Search Query</label>
-                          <input
-                            type="text"
-                            value={dynamicParamValues.query || ''}
-                            onChange={(e) =>
-                              setDynamicParamValues((prev) => ({ ...prev, query: e.target.value }))
-                            }
-                            className="input"
-                          />
-                        </div>
-                      </div>
-                    )
-                  }
-
-                  return (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {paramsList.map((param: any, i: number) => {
-                        const pName = param.Name || param.name || `param_${i}`
-                        const pLabel = param.Label || param.label || pName
-                        const pType = (param.Type || param.type || 'text').toLowerCase()
-                        const pReq = param.Required ?? param.required ?? false
-                        const pPlaceholder = param.Placeholder || param.placeholder || ''
-                        const pDesc = param.Description || param.description || ''
-
-                        const isTextarea = pType === 'textarea' || pName === 'ai_instruction'
-                        const isBoolean = pType === 'boolean' || pName === 'deduplicate'
-
-                        return (
-                          <div key={pName} className={`form-group ${isTextarea ? 'col-span-1 md:col-span-2' : ''}`}>
-                            <label className="label flex items-center justify-between">
-                              <span>{pLabel} {pReq && <span className="text-red-400">*</span>}</span>
-                            </label>
-                            {isTextarea ? (
-                              <textarea
-                                rows={3}
-                                required={pReq}
-                                placeholder={pPlaceholder}
-                                value={dynamicParamValues[pName] ?? ''}
-                                onChange={(e) =>
-                                  setDynamicParamValues((prev) => ({
-                                    ...prev,
-                                    [pName]: e.target.value,
-                                  }))
-                                }
-                                className="input text-xs font-sans"
-                              />
-                            ) : isBoolean ? (
-                              <select
-                                value={String(dynamicParamValues[pName] ?? param.default ?? true)}
-                                onChange={(e) =>
-                                  setDynamicParamValues((prev) => ({
-                                    ...prev,
-                                    [pName]: e.target.value === 'true',
-                                  }))
-                                }
-                                className="input"
-                              >
-                                <option value="true">Aktif (Ya - Skip URL duplikat)</option>
-                                <option value="false">Nonaktif (Ambil ulang URL yang sama)</option>
-                              </select>
-                            ) : (
-                              <input
-                                type={pType === 'number' ? 'number' : pType === 'date' ? 'date' : 'text'}
-                                required={pReq}
-                                placeholder={pPlaceholder}
-                                value={dynamicParamValues[pName] ?? ''}
-                                onChange={(e) =>
-                                  setDynamicParamValues((prev) => ({
-                                    ...prev,
-                                    [pName]: pType === 'number' ? (e.target.value === '' ? '' : Number(e.target.value)) : e.target.value,
-                                  }))
-                                }
-                                className="input"
-                              />
-                            )}
-                            {pDesc && <p className="text-[11px] text-gray-400 mt-1">{pDesc}</p>}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )
-                })()}
+                <DynamicParamsForm
+                  methodCode={methodCode}
+                  methods={methods}
+                  dynamicParamValues={dynamicParamValues}
+                  setDynamicParamValues={setDynamicParamValues}
+                />
               </div>
             )}
 

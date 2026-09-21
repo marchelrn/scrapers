@@ -174,8 +174,8 @@ export function JobDetailPage() {
   return (
     <div>
       <Header
-        title={config?.name ? `Hasil Eksekusi: ${config.name}` : `Hasil Eksekusi Job`}
-        subtitle={`Job ID: ${job.id}`}
+        title={config?.name ? `${config.name}` : `Hasil Eksekusi Job`}
+        // subtitle={`Job ID: ${job.id}`} // DEBUGGING ONLY!
       />
 
       <div className="p-8 space-y-6 max-w-6xl mx-auto">
@@ -193,10 +193,10 @@ export function JobDetailPage() {
               </span>
               {getStatusBadge(job.status)}
             </div>
-            <p className="text-xs text-gray-400">
-              Konfigurasi: <span className="font-semibold text-brand-300">{config?.name || job.config_id}</span>
-              <span className="text-gray-500 font-mono ml-2">(Job ID: {job.id})</span>
-            </p>
+            {/*<p className="text-xs text-gray-400">*/}
+            {/*  Konfigurasi: <span className="font-semibold text-brand-300">{config?.name || job.config_id}</span>*/}
+            {/*  /!*<span className="text-gray-500 font-mono ml-2">(Job ID: {job.id})</span>*/    /*DEBUGGING ONLY! *!/*/}
+            {/*</p>*/}
           </div>
 
           <div className="flex flex-col md:items-end gap-2.5">
@@ -294,7 +294,7 @@ export function JobDetailPage() {
               </div>
 
               {flattenedRows.length > 0 && (
-                <div className="flex items-center gap-1 bg-surface-900 p-1 rounded-xl border border-surface-700 text-xs">
+                <div className="flex items-center gap-1 bg-surface-900 p-1 rounded -xl border border-surface-700 text-xs">
                   <button
                     onClick={() => setViewMode('table')}
                     className={`px-3 py-1 rounded-lg flex items-center gap-1.5 transition-colors ${

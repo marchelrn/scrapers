@@ -46,10 +46,6 @@ export function Login() {
 
   return (
     <div className="min-h-screen bg-surface-950 flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Background Glow Deco */}
-      <div className="absolute -top-40 -left-40 w-96 h-96 bg-brand-600/15 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
-
       <div className="w-full max-w-md card p-8 glass relative z-10 shadow-2xl border border-surface-600">
         {/* Header Logo */}
         <div className="flex flex-col items-center text-center mb-8">
