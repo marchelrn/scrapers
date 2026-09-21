@@ -73,19 +73,17 @@ func (m *GoogleNewsMethod) ParameterDefinitions() []registry.ParameterDefinition
 		},
 		{
 			Name:        "ai_instruction",
-			Label:       "AI Instruction / Prompt",
+			Label:       "AI Instruction",
 			Type:        "textarea",
 			Required:    false,
-			Placeholder: "e.g. Ringkas dan saring berita mengenai produksi komoditas pangan",
-			Description: "Gunakan LLM (Gemini) untuk meringkas dan menyaring teks hasil ekstraksi berdasarkan instruksi.",
+			Placeholder: "e.g. Ringkas dan ekstrak hanya data mengenai komoditas Pertanian",
 		},
 		{
-			Name:        "deduplicate",
-			Label:       "Hindari Duplikasi (Skip URL yang sudah pernah diambil)",
-			Type:        "boolean",
-			Required:    false,
-			Default:     true,
-			Description: "Jika aktif, URL yang sudah pernah diambil pada konfigurasi ini tidak akan diambil ulang.",
+			Name:     "deduplicate",
+			Label:    "Hindari Duplikasi",
+			Type:     "boolean",
+			Required: false,
+			Default:  true,
 		},
 	}
 }
