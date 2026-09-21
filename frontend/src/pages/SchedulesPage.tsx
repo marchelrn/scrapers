@@ -66,6 +66,17 @@ export function SchedulesPage() {
     fetchData()
   }, [])
 
+  const handleOpenCreateModal = () => {
+    if (configs.length === 0) {
+      toast.error('Belum ada konfigurasi. Silakan buat konfigurasi terlebih dahulu sebelum membuat jadwal.')
+      return
+    }
+    if (!createConfigId && configs.length > 0) {
+      setCreateConfigId(configs[0].id)
+    }
+    setShowCreateModal(true)
+  }
+
   // Handle Create Schedule
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -309,12 +320,7 @@ export function SchedulesPage() {
             </button>
 
             <button
-              onClick={() => {
-                if (configs.length > 0 && !createConfigId) {
-                  setCreateConfigId(configs[0].id)
-                }
-                setShowCreateModal(true)
-              }}
+              onClick={handleOpenCreateModal}
               className="btn-primary text-xs py-2 px-4 shadow-lg shadow-brand-900/30"
             >
               <Plus className="w-4 h-4" />
@@ -371,9 +377,6 @@ export function SchedulesPage() {
                   <tr>
                     <td colSpan={5} className="text-center py-16 px-4">
                       <div className="max-w-sm mx-auto flex flex-col items-center justify-center text-center space-y-3">
-                        <div className="w-12 h-12 rounded-2xl bg-surface-800 border border-surface-700 flex items-center justify-center text-gray-500">
-                          <Calendar className="w-6 h-6" />
-                        </div>
                         <div>
                           <p className="text-sm font-semibold text-gray-300">
                             {searchQuery || filterStatus !== 'all'
@@ -386,7 +389,7 @@ export function SchedulesPage() {
                               : 'Mulai buat otomasi jadwal untuk menjalankan konfigurasi scraping secara berkala.'}
                           </p>
                         </div>
-                        {(!searchQuery && filterStatus === 'all') && (
+                        {/*{(!searchQuery && filterStatus === 'all') && (
                           <button
                             onClick={() => setShowCreateModal(true)}
                             className="btn-primary text-xs py-2 px-3 mt-2"
@@ -394,7 +397,7 @@ export function SchedulesPage() {
                             <Plus className="w-4 h-4" />
                             <span>Buat Jadwal Pertama</span>
                           </button>
-                        )}
+                        )}*/}
                       </div>
                     </td>
                   </tr>
@@ -566,9 +569,6 @@ export function SchedulesPage() {
           <div className="card w-full max-w-lg bg-surface-900 border-surface-600 shadow-2xl p-6 space-y-5 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-surface-700 pb-3">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-brand-500/20 border border-brand-500/30 flex items-center justify-center text-brand-300">
-                  <Plus className="w-4 h-4" />
-                </div>
                 <div>
                   <h3 className="text-sm font-bold text-white">Tambah Jadwal Scraping Otomatis</h3>
                   <p className="text-[11px] text-gray-400">Atur frekuensi dan waktu eksekusi berkala</p>
