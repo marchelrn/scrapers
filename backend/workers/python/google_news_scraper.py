@@ -61,6 +61,202 @@ KEYWORDS = {
     "Perdagangan": ["harga", "pasar", "sembako", "pihps", "eceran", "minyak goreng", "perdagangan", "harga pangan", "pasar modern", "pasar tradisional"]
 }
 
+# ---------------------------------------------------------------------------
+# Gazetteer lokasi untuk penyaringan geografis
+# ---------------------------------------------------------------------------
+# Sistem ini khusus untuk BPS Provinsi Sulawesi Utara: ruang lingkup fenomena
+# TERBATAS pada Sulawesi Utara dan kabupaten/kota di dalamnya. Karena itu ada
+# dua kelompok:
+#   * SULUT_REGIONS  -> satu-satunya lokasi target yang SAH untuk dicari.
+#   * NON_SULUT_LOCATIONS -> kota/provinsi luar Sulut. Bukan target yang sah;
+#     dipakai untuk (a) menolak query/instruksi yang menyebut lokasi luar Sulut,
+#     dan (b) mengenali lokasi pesaing pada artikel.
+# Setiap entri memetakan nama kanonik -> daftar varian kata kunci (huruf kecil)
+# dan sengaja dibuat dapat diperluas bila cakupan wilayah bertambah.
+SULUT_REGIONS = {
+    "Kota Manado": ["manado"],
+    "Kota Bitung": ["bitung"],
+    "Kota Tomohon": ["tomohon"],
+    "Kota Kotamobagu": ["kotamobagu"],
+    "Kab. Minahasa": ["kabupaten minahasa", "tondano"],
+    "Kab. Minahasa Utara": ["minahasa utara", "minut", "airmadidi", "likupang"],
+    "Kab. Minahasa Selatan": ["minahasa selatan", "minsel", "amurang"],
+    "Kab. Minahasa Tenggara": ["minahasa tenggara", "mitra", "ratahan", "tombatu"],
+    "Kab. Bolaang Mongondow": ["bolaang mongondow", "bolmong", "lolak"],
+    "Kab. Bolaang Mongondow Utara": ["bolaang mongondow utara", "bolmut", "boroko"],
+    "Kab. Bolaang Mongondow Selatan": ["bolaang mongondow selatan", "bolsel", "bolaang uki"],
+    "Kab. Bolaang Mongondow Timur": ["bolaang mongondow timur", "boltim", "tutuyan"],
+    "Kab. Kepulauan Sangihe": ["sangihe", "tahuna"],
+    "Kab. Kepulauan Talaud": ["talaud", "melonguane"],
+    "Kab. Kepulauan Sitaro": ["sitaro", "siau", "tagulandang", "biaro", "ondong"],
+    "Prov. Sulawesi Utara": ["sulawesi utara", "sulut"],
+}
+
+# Lokasi luar Sulut. Bila salah satu muncul sebagai target di query/instruksi,
+# permintaan ditolak karena di luar ruang lingkup BPS Sulut.
+NON_SULUT_LOCATIONS = {
+    "DKI Jakarta": ["jakarta", "dki jakarta"],
+    "Kota Surabaya": ["surabaya"],
+    "Kota Bandung": ["bandung"],
+    "Kota Semarang": ["semarang"],
+    "Kota Medan": ["medan"],
+    "Kota Makassar": ["makassar", "ujung pandang"],
+    "Kota Palu": ["palu"],
+    "Prov. Sulawesi Tengah": ["sulawesi tengah", "sulteng"],
+    "Prov. Sulawesi Selatan": ["sulawesi selatan", "sulsel"],
+    "Prov. Sulawesi Tenggara": ["sulawesi tenggara", "sultra"],
+    "Prov. Sulawesi Barat": ["sulawesi barat", "sulbar"],
+    "Prov. Gorontalo": ["gorontalo"],
+    "Kota Kendari": ["kendari"],
+    "Kota Yogyakarta": ["yogyakarta", "jogja", "yogya"],
+    "Kota Denpasar": ["denpasar", "bali"],
+    "Kota Balikpapan": ["balikpapan"],
+    "Kota Samarinda": ["samarinda"],
+    "Kota Ambon": ["ambon"],
+    "Kota Jayapura": ["jayapura"],
+}
+
+# Gabungan untuk mendeteksi lokasi apa pun yang disebut dalam artikel (target
+# maupun pesaing).
+LOCATION_GAZETTEER = {**SULUT_REGIONS, **NON_SULUT_LOCATIONS}
+
+# Lokasi yang muncul di potongan "Baca Juga" / tautan terkait sering menipu
+# filter berbasis kata kunci. Frasa berikut menandai awal blok tersebut sehingga
+# teks setelahnya diabaikan saat membentuk lede untuk pengecekan lokasi.
+_RELATED_LINK_MARKERS = re.compile(
+    r'(baca\s+juga|baca\s*:|simak\s+juga|lihat\s+juga|artikel\s+terkait|'
+    r'berita\s+terkait|tautan\s+terkait|selengkapnya|topik\s+terkait|'
+    r'download\s+kompastv|#\w+)',
+    re.IGNORECASE
+)
+
+
+def _strip_related_blocks(text):
+    """Buang baris "Baca Juga", tautan terkait, dan baris hashtag dari teks.
+
+    Bagian-bagian ini kerap menyebut lokasi lain (mis. tautan "...di Manado"
+    pada artikel yang sebenarnya membahas Bitung), sehingga menyesatkan filter
+    lokasi maupun penilai LLM. Baris apa pun yang memuat penanda tautan terkait
+    dibuang seluruhnya.
+    """
+    if not text:
+        return ""
+    kept = []
+    for line in text.split('\n'):
+        l = line.strip()
+        if not l:
+            continue
+        if _RELATED_LINK_MARKERS.search(l):
+            continue
+        kept.append(l)
+    return "\n".join(kept)
+
+
+def _detect_locations_in_text(text, gazetteer=LOCATION_GAZETTEER):
+    """Kembalikan himpunan nama kanonik lokasi yang disebut dalam teks.
+
+    Pencocokan memakai batas kata agar "bitung" tidak cocok dengan substring
+    yang lebih panjang, dan varian multi-kata (mis. "minahasa utara") diperiksa
+    apa adanya. Gazetteer dapat dipersempit (mis. hanya Sulut, atau hanya luar
+    Sulut) sesuai kebutuhan pemanggil.
+    """
+    if not text:
+        return set()
+    low = text.lower()
+    found = set()
+    for canonical, variants in gazetteer.items():
+        for v in variants:
+            if re.search(r'\b' + re.escape(v) + r'\b', low):
+                found.add(canonical)
+                break
+    return found
+
+
+def _detect_target_locations(query, ai_instruction):
+    """Deteksi lokasi TARGET (khusus wilayah Sulut) dari query + AI Instruction.
+
+    Mengembalikan tuple (set nama kanonik Sulut, set varian kata kunci). Bila
+    kosong, berarti user tidak menyebut wilayah Sulut tertentu sehingga filter
+    lokasi dilewati (tidak ada penyaringan geografis yang dipaksakan). Hanya
+    wilayah di dalam Sulawesi Utara yang dianggap target sah -- lokasi luar
+    Sulut ditangani terpisah oleh _detect_out_of_scope_locations.
+    """
+    combined = " ".join([query or "", ai_instruction or ""])
+    canonicals = _detect_locations_in_text(combined, SULUT_REGIONS)
+    variants = set()
+    for c in canonicals:
+        variants.update(SULUT_REGIONS.get(c, []))
+    # Bila user menyebut provinsi Sulut secara umum, seluruh kabupaten/kota di
+    # dalamnya dianggap sah sebagai target agar berita tingkat kota tetap lolos.
+    if "Prov. Sulawesi Utara" in canonicals:
+        for region_variants in SULUT_REGIONS.values():
+            variants.update(region_variants)
+    return canonicals, variants
+
+
+def _detect_out_of_scope_locations(query, ai_instruction):
+    """Kembalikan himpunan lokasi LUAR Sulut yang disebut di query/instruksi.
+
+    Ruang lingkup sistem terbatas pada Sulawesi Utara, jadi penyebutan kota atau
+    provinsi lain sebagai kriteria pencarian tidak sah dan permintaan harus
+    ditolak sebelum scraping dijalankan.
+    """
+    combined = " ".join([query or "", ai_instruction or ""])
+    return _detect_locations_in_text(combined, NON_SULUT_LOCATIONS)
+
+
+def _build_location_lede(result):
+    """Bentuk teks "lede" (judul + awal isi bersih) untuk pengecekan lokasi.
+
+    Blok "Baca Juga"/tautan terkait dibuang lebih dulu, lalu diambil ~800
+    karakter pertama. Artikel biasanya menegaskan lokasi utamanya di judul dan
+    paragraf pembuka; menyebut kota lain jauh di bawah tidak menjadikannya
+    tentang kota itu.
+    """
+    title = result.get("title") or ""
+    body = _strip_related_blocks(result.get("content") or "")
+    return (title + "\n" + body[:800]).lower()
+
+
+def _passes_location_filter(result, target_canonicals, target_variants):
+    """True bila artikel benar-benar membahas salah satu lokasi target.
+
+    Aturan:
+    - Lokasi target harus muncul di judul atau lede (bukan sekadar di ekor
+      artikel / tautan terkait yang sudah dibuang).
+    - Bila judul justru didominasi lokasi PESAING (lokasi non-target dari
+      gazetteer) sementara target tidak ada di judul, artikel dianggap tentang
+      kota lain dan ditolak -- inilah kasus "Bitung lolos karena menyebut
+      Manado di Baca Juga".
+    """
+    if not target_canonicals:
+        return True  # user tidak menentukan lokasi -> jangan menyaring
+
+    title_low = (result.get("title") or "").lower()
+    lede = _build_location_lede(result)
+
+    target_in_title = any(
+        re.search(r'\b' + re.escape(v) + r'\b', title_low) for v in target_variants
+    )
+    target_in_lede = any(
+        re.search(r'\b' + re.escape(v) + r'\b', lede) for v in target_variants
+    )
+
+    # Lokasi target sama sekali tidak muncul di judul/lede -> bukan tentang
+    # wilayah yang diminta.
+    if not target_in_lede:
+        return False
+
+    # Judul menyebut lokasi lain (pesaing) tetapi tidak menyebut target ->
+    # kemungkinan besar berita itu tentang kota lain.
+    if not target_in_title:
+        title_locations = _detect_locations_in_text(title_low)
+        competing_in_title = title_locations - target_canonicals
+        if competing_in_title:
+            return False
+
+    return True
+
 def _clean_noise(text, title=""):
     if not text:
         return ""
@@ -573,6 +769,20 @@ def scrape(config_params):
     if not query:
         raise ValidationError("Parameter 'query' atau 'keyword' wajib diisi.")
 
+    # Ruang lingkup sistem terbatas pada Sulawesi Utara (BPS Prov. Sulut). Bila
+    # query atau AI Instruction menyebut kota/provinsi di luar Sulut sebagai
+    # kriteria, permintaan ditolak sejak awal -- tidak ada gunanya menarik
+    # berita wilayah lain yang pasti di luar cakupan.
+    ai_instruction_scope = config_params.get("ai_instruction", "") or ""
+    out_of_scope = _detect_out_of_scope_locations(query, ai_instruction_scope)
+    if out_of_scope:
+        lokasi = ", ".join(sorted(out_of_scope))
+        raise ValidationError(
+            "Lokasi di luar ruang lingkup Sulawesi Utara terdeteksi pada query "
+            "atau AI Instruction: %s. Sistem ini hanya mencakup Sulawesi Utara "
+            "dan kabupaten/kota di dalamnya." % lokasi
+        )
+
     domain_filter = config_params.get("domain_filter", "")
     if domain_filter:
         raw_domains = [d.strip() for d in str(domain_filter).split(',') if d.strip()]
@@ -627,7 +837,15 @@ def scrape(config_params):
     # penyaring adalah deduplikasi, sehingga melipatgandakan kolam berarti mengunduh
     # belasan artikel yang tidak akan pernah dipakai -- beban sia-sia bagi penerbit
     # dan sumber pemblokiran yang paling mudah dihindari.
-    if config_params.get("ai_instruction"):
+    # Deteksi lokasi target lebih awal: bila user meminta wilayah tertentu,
+    # penyaringan geografis akan membuang sebagian besar kandidat, jadi kolam
+    # perlu diperbesar agar hasil akhir tidak kering.
+    ai_instruction_early = config_params.get("ai_instruction", "") or ""
+    target_canonicals, target_variants = _detect_target_locations(query, ai_instruction_early)
+
+    if target_canonicals:
+        candidate_pool_size = max(max_results * 4, 20)
+    elif config_params.get("ai_instruction"):
         candidate_pool_size = max(max_results * 3, 15)
     else:
         candidate_pool_size = max_results + 3
@@ -672,6 +890,16 @@ def scrape(config_params):
             except Exception:
                 pass
 
+    # Penyaring lokasi deterministik. Berjalan lebih dulu dan TIDAK bergantung
+    # pada LLM, sehingga permintaan wilayah user (mis. "hanya Manado") tetap
+    # ditegakkan meski GEMINI_API_KEY tidak tersedia. Bila user tidak menyebut
+    # lokasi mana pun, langkah ini tidak membuang apa-apa.
+    if target_canonicals and final_results:
+        final_results = [
+            r for r in final_results
+            if _passes_location_filter(r, target_canonicals, target_variants)
+        ]
+
     # Optional AI Summarization & Relevancy Filtering
     ai_instruction = config_params.get("ai_instruction", "").strip()
     gemini_api_key = os.environ.get("GEMINI_API_KEY", "").strip()
@@ -697,8 +925,13 @@ def _filter_and_summarize_with_ai(final_results, query, ai_instruction, gemini_a
             if not raw_content or len(raw_content) < 30:
                 continue
 
+            # Buang blok "Baca Juga"/tautan terkait sebelum dikirim ke model.
+            # Bagian itu sering menyebut kota lain dan membuat model salah menilai
+            # lokasi utama berita.
+            clean_content = _strip_related_blocks(raw_content)
+
             if ai_instruction_clean:
-                instruction_text = f"Instruksi Filter Tambahan: {ai_instruction_clean}"
+                instruction_text = f"Instruksi Filter Tambahan (WAJIB dipatuhi): {ai_instruction_clean}"
             else:
                 instruction_text = "Fokus pada keakuratan topik utama berita terhadap query pencarian."
 
@@ -708,10 +941,17 @@ Query Pencarian User: {query}
 
 Judul Berita: {title}
 Isi Berita:
-{raw_content[:5000]}
+{clean_content[:5000]}
 
-Evaluasi apakah artikel berita di atas RELEVAN dengan Query Pencarian User dan Instruksi Filter di atas:
-1. Jika TIDAK RELEVAN (misal: topik di luar query pencarian, atau melanggar instruksi filter user), jawab HANYA:
+Evaluasi apakah artikel berita di atas RELEVAN dengan Query Pencarian User dan Instruksi Filter di atas.
+
+Aturan penilaian lokasi (penting):
+- Jika Instruksi Filter menyebut wilayah/kota tertentu, artikel hanya RELEVAN bila wilayah itu adalah SUBJEK UTAMA berita (disebut di judul atau paragraf pembuka).
+- ABAIKAN penyebutan kota pada bagian "Baca Juga", tautan terkait, atau daftar berita lain -- itu bukan topik utama.
+- Jika berita utamanya membahas kota LAIN (mis. Bitung) meski sempat menyebut kota target, jawab TIDAK RELEVAN.
+
+Jawaban:
+1. Jika TIDAK RELEVAN (topik di luar query, lokasi tidak sesuai, atau melanggar instruksi filter), jawab HANYA:
 TIDAK RELEVAN
 
 2. Jika RELEVAN, jawab dalam format:
