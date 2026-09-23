@@ -349,7 +349,7 @@ func (s *ScrapingJobService) executeJobAsync(jobID string, config *models.Scrapi
 	}
 
 	// Run command using registry method with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
 	workerResult, err := method.Execute(ctx, params)
