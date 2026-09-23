@@ -63,6 +63,7 @@ func Run() {
 	// Run server in a goroutine so it doesn't block
 	go func() {
 
+		log.Println("Server started on port", cfg.Port)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("Failed to start server: %v", err)
 		}
