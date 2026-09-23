@@ -38,7 +38,7 @@ export function DashboardPage() {
 
   useEffect(() => {
     fetchData()
-    const interval = setInterval(fetchData, 30000) // auto-refresh 30s
+    const interval = setInterval(fetchData, 60000) // auto-refresh 60s
     return () => clearInterval(interval)
   }, [])
 
